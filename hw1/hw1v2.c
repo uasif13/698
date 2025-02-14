@@ -24,8 +24,8 @@ void create_send_matrix(double* recv_matrix,double*orig_matrix,int elms_to_comm,
 int check_result(double*C, double*D, int n);
 
 int main(int argc, char *argv[]) {
-  int i, n = 32,n_sq, flag, my_work;
-  int my_rank, num_procs = 4;
+  int i, n = 2,n_sq, flag, my_work;
+  int my_rank, num_procs = 2;
   double *A, *B, *C, *D, *E;	/* D is for local computation, E is for buffers */
   int addr_to_comm, elms_to_comm;
   double start_time, end_time, elapsed;
@@ -73,20 +73,19 @@ int main(int argc, char *argv[]) {
 	  for (int i = 1; i < num_procs; i++) {
 		create_send_matrix(E,A,elms_to_comm,i);
 		printf("current pid to send:%d, elements to send: %d \n", i, elms_to_comm);
-		MPI_Send(E,n_sq, MPI_DOUBLE, i, flag, MPI_COMM_WORLD);
 		printf("Matrix sent\n");
 		output_matrix(E,n_sq);
   		printf("\n");
+		MPI_Send(E,n_sq, MPI_DOUBLE, i, flag, MPI_COMM_WORLD);
 	  }
   } else {
     /* Receive my_work rows of A */
     /* Use MPI_Recv */
 	  printf("MPI_Recv Routine for A\n");
   		printf("pid:%d ", my_rank);
-		MPI_Recv((A+(elms_to_comm)*my_rank), elms_to_comm, MPI_DOUBLE, 0 , flag, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+		MPI_Recv(A, n_sq, MPI_DOUBLE, 0 , flag, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 		
 		printf("Elements Received for pid: %d\n", my_rank);
-		output_matrix((A+(elms_to_comm)*my_rank), elms_to_comm);
 		printf("A Matrix for pid: %d\n", my_rank);
 		output_matrix(A,n*n);
   		printf("\n");
@@ -120,10 +119,10 @@ int main(int argc, char *argv[]) {
     /* Use MPI_Send */
   		printf("MPI_Send Routine C \n");
 	  for (int i = 1; i < num_procs; i++) {
-	  	MPI_Send((C+(elms_to_comm)*i), elms_to_comm, MPI_DOUBLE, 0 ,flag, MPI_COMM_WORLD);
+	  	MPI_Send((C+elms_to_comm*my_rank), elms_to_comm, MPI_DOUBLE, 0 ,flag, MPI_COMM_WORLD);
   		printf("pid:%d ", my_rank);
 		printf("Elements sent\n");
-		output_matrix((C+(elms_to_comm)*i),elms_to_comm);
+		output_matrix((C+elms_to_comm*my_rank), elms_to_comm);
 		printf("C Matrix for pid: %d\n", my_rank);
   		printf("\n");
 	  }
