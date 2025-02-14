@@ -1,0 +1,37 @@
+point-to-point communication
+
+divide work between available tasks - communicate with point to point calls
+
+look for data dependencies, loop chunks, portion of loops
+only two tasks
+system buffer is used to hold out of sync data- think networking
+
+blocking vs nonblocking
+
+
+collective communication
+
+
+one-sided communication
+
+
+mpi initialization
+
+need comm_world, init, comm_rank, comm_size
+
+always need MPI_Init -> called only once and can have arguments passed to it
+should have MPI_Comm_size -> number of processes in communicator
+should have MPI_Comm_rank -> rank of calling process. bet 0 - num_proc-1. set root to 0 
+mostly use MPI_COMM_WORLD -> includes all your processes
+
+my_work, elms_to_comm -> two important variables for the sender and receiver.
+
+my_work = n/num_procs -> this is how the matrix is divided between ROWS
+elms_to_comm = my_work*n -> for each process, this accounts for the COLUMNS
+
+- examples in ring_c ompi
+MPI_Send(buffer, count, type, dest, tag, comm);
+
+MPI_Recv(buffer, count, type, source, tag, comm,status);
+
+

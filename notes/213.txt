@@ -1,0 +1,53 @@
+advantages of RMA operations
+
+- irregular communications
+- need atomic operations
+
+speculative computed?
+
+fetch and add
+
+compare and swap
+
+kernel 
+
+creating public memory
+rma - remote memory access
+
+MPI_Win_craete - exposes local memory
+
+MPI_put
+
+MPI_Win_free
+MPI_get
+MPI_Put
+MPI_Accumulate
+
+MPI_win_allocate()
+
+MPI_win_free(&win);
+MPI_Finalize(); return 0;l
+
+MPI_win_create()
+
+to create -> buffer
+-> gives memory area to MPI-create
+-> buffer + create
+-> window
+
+MPI_accumulate
+-> 2+ proc
+- exposes a window
+- add rank with increment
+
+MPI_win_fence(0, window);
+
+gpu has more cores bec instruction set is small
+-> backwards compatible
+i'll take the hit
+they think im a yes man
+read before write
+how to mix and match data and procs -> high performance computing major theme
+procs -> data = proc migration
+data -> procs = data migration
+
