@@ -24,9 +24,9 @@ void create_send_matrix(double* recv_matrix,double*orig_matrix,int elms_to_comm,
 int check_result(double*C, double*D, int n);
 
 int main(int argc, char *argv[]) {
-  int i, n = 512,n_sq, flag, my_work;
-  int my_rank, num_procs = 2;
-  double *A, *B, *C, *D, *E;	/* D is for local computation, E is for buffers */
+  int i, n = 8,n_sq, flag, my_work;
+  int my_rank, num_procs = 4;
+  double *A, *B, *C, *D, *E, *F;	/* D is for local computation, E is for buffers */
   int addr_to_comm, elms_to_comm;
   double start_time, end_time, elapsed;
 
@@ -51,6 +51,7 @@ int main(int argc, char *argv[]) {
   C = (double *) malloc(sizeof(double) * n_sq);
   D = (double *) malloc(sizeof(double) * n_sq);
   E = (double *) malloc(sizeof(double) * n_sq);
+  F = (double *) malloc(sizeof(double) * n_sq);
 
   if (my_rank == ROOT) {
     printf("pid=%d: num_procs=%d n=%d my_work=%d\n",\
@@ -58,52 +59,51 @@ int main(int argc, char *argv[]) {
 
 	  init_data(A,n_sq);
 	  init_data(B,n_sq);
+	  printf("initial A\n");
+	  output_matrix(A,n_sq);
+	  printf("\n Initial B\n");
+	  output_matrix(B,n_sq);
+	  printf("\n");
   }
   
   start_time = MPI_Wtime();
+  printf("pid: %d\n", my_rank);
+  printf("Scatter process\n");
   
-  if (my_rank == ROOT) {
-    /* Send my_work rows of A to num_procs - 1 processes */
-    /* Use MPI_Send */
-	  for (int i = 1; i < num_procs; i++) {
-		create_send_matrix(E,A,elms_to_comm,i);
-		MPI_Send(E,n_sq, MPI_DOUBLE, i, flag, MPI_COMM_WORLD);
-	  }
-  } else {
-    /* Receive my_work rows of A */
-    /* Use MPI_Recv */
-		MPI_Recv(A, n_sq, MPI_DOUBLE, 0 , flag, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-		
-  }
+  MPI_Scatter(A, elms_to_comm, MPI_DOUBLE, E,elms_to_comm,MPI_DOUBLE,0, MPI_COMM_WORLD);
+  output_matrix(E,elms_to_comm);
+  printf("\n");
   
   /* Broadcast B to every one */
   MPI_Bcast(B, n_sq, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
 
   /* Each process computes its own mat mult */
-  mat_mult(A, B, C, n, n);
-
-  if (my_rank == ROOT) {
+  
+  printf("Matrix Multiplication");
+  printf("pid: %d  mat Mult\n",my_rank);
+  mat_mult(E, B, F, n, elms_to_comm);
+  output_matrix(F,elms_to_comm);
+  
+  output_matrix(F,elms_to_comm);
     /* Receive my_work rows of C from num_procs - 1 processes */
-    /* Use MPI_Recv */
-	  for (int i = 1; i < num_procs; i++) {
-		MPI_Recv((C+(elms_to_comm)*i), elms_to_comm, MPI_DOUBLE, i, flag, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-	  }
-  } else {
-    /* Send my_work rows of C to ROOT */
-    /* Use MPI_Send */
-	  for (int i = 1; i < num_procs; i++) {
-	  	MPI_Send((C+elms_to_comm*my_rank), elms_to_comm, MPI_DOUBLE, 0 ,flag, MPI_COMM_WORLD);
-	  }
-  }
+  
+  printf("MPI_Gather \n");
+  printf("pid: %d  \n",my_rank);
+
+  
+  	MPI_Gather(F,elms_to_comm, MPI_DOUBLE,C, elms_to_comm,MPI_DOUBLE,0, MPI_COMM_WORLD);
 
   if (my_rank == ROOT) {
     end_time = MPI_Wtime();
     elapsed = end_time - start_time;
 
     /* Local computation for comparison: results in D */
-    mat_mult(A, B, D, n, n);
+  output_matrix(C,n_sq);
+    mat_mult(A, B, D, n, elms_to_comm);
 
+    printf("check result\n");
+  output_matrix(C,n_sq);
     flag = check_result(C,D,n);
     if (flag) printf("Test: FAILED\n");
     else {
@@ -111,6 +111,7 @@ int main(int argc, char *argv[]) {
       printf("Total time %d: %f seconds.\n", my_rank, elapsed);
     }
   }
+  printf ("free heap pointers");
   MPI_Finalize();
   return 0;
 }
