@@ -8,10 +8,10 @@ void init_data(double* data, int datasize);
 
 int main(int argc, char *argv[]) {
 	// instance variables
-	int n = 32;
+	int n = 2;
 	int n_sq = n*n;
 	int my_rank;
-	int num_procs = 6;
+	int num_procs = 2;
 	int my_work;
 	int elms_to_comm;
 	int flag=1;

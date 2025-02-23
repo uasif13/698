@@ -1,0 +1,3 @@
+mpirun -n [np] valgrind --leak-check=yes [program]
+mpirun -n [np] xterm -e gdb [program]
+

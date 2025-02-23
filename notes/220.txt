@@ -1,0 +1,10 @@
+
+row = b.y * b.dim + dx.y
+
+for blur, parallelization approach, assign one thread to each output pixel with multiple inputs
+
+col = b.x * b.dim + dx.y
+
+input [row * width + col]
+
+
