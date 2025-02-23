@@ -43,7 +43,11 @@ int main(int argc, char* argv[])
     // init_data(window_buffer,n_sq);
     if (my_rank == 0) {
 	    init_data(A,n_sq);
+	    printf("Initial A\n");
+	    output_matrix(A,n_sq);
 	    init_data(B,n_sq);
+	    printf("Initial B\n");
+	    output_matrix(B,n_sq);
     }
 
     MPI_Win window;
@@ -55,18 +59,18 @@ int main(int argc, char* argv[])
     MPI_Win_fence(0,window);
 
     double * remote_value;
-    remote_value = (double *) malloc(n_sq*sizeof(double));
+    remote_value = (double *) malloc(elms_to_comm*sizeof(double));
     if (my_rank != 0) {
 
 	double my_value = 123456.7;
 	MPI_Put(&my_value,1, MPI_DOUBLE,0,0,1,MPI_DOUBLE,window);
-    	MPI_Get(remote_value,n_sq,MPI_DOUBLE,0,0,n_sq,MPI_DOUBLE,window);
+    	MPI_Get(remote_value,elms_to_comm,MPI_DOUBLE,0,elms_to_comm*my_rank,elms_to_comm,MPI_DOUBLE,window);
     }
     MPI_Win_fence(0,window);
 
     if (my_rank != 0) {
-    	printf("MPI process 0: output array from p1 buffer 1\n" );
-	output_matrix(remote_value,n_sq);
+    	printf("MPI process 0: output array for %d\n",my_rank );
+	output_matrix(remote_value,elms_to_comm);
     }
 
     MPI_Win_free(&window);
@@ -86,4 +90,5 @@ void output_matrix(double* array, int data_size) {
 	for (int i = 0; i < data_size; i++) {
 		printf("%.1f ",array[i]);
 	}
+	printf("\n");
 }
