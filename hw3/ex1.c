@@ -33,12 +33,18 @@ int main(int argc, char* argv[])
     const int n_sq = n*n;
     // double window_buffer[n_sq];
     double * window_buffer;
-    double *A;
+    double *A, *B;
+    int my_work = n / comm_size;
+    int elms_to_comm = my_work * n;
 
     A = (double*) malloc(n_sq*sizeof(double));
-    window_buffer = (double*) malloc(n_sq*sizeof(double));
-    init_data(window_buffer,n_sq);
-    init_data(A,n_sq);
+    B = (double*) malloc(n_sq*sizeof(double));
+    // window_buffer = (double*) malloc(n_sq*sizeof(double));
+    // init_data(window_buffer,n_sq);
+    if (my_rank == 0) {
+	    init_data(A,n_sq);
+	    init_data(B,n_sq);
+    }
 
     MPI_Win window;
 
@@ -50,15 +56,15 @@ int main(int argc, char* argv[])
 
     double * remote_value;
     remote_value = (double *) malloc(n_sq*sizeof(double));
-    if (my_rank == 0) {
-    	MPI_Get(remote_value,n_sq,MPI_DOUBLE,1,0,n_sq,MPI_DOUBLE,window);
+    if (my_rank != 0) {
 
 	double my_value = 123456.7;
-	MPI_Put(&my_value,1, MPI_DOUBLE,1,0,1,MPI_DOUBLE,window);
+	MPI_Put(&my_value,1, MPI_DOUBLE,0,0,1,MPI_DOUBLE,window);
+    	MPI_Get(remote_value,n_sq,MPI_DOUBLE,0,0,n_sq,MPI_DOUBLE,window);
     }
     MPI_Win_fence(0,window);
 
-    if (my_rank == 0) {
+    if (my_rank != 0) {
     	printf("MPI process 0: output array from p1 buffer 1\n" );
 	output_matrix(remote_value,n_sq);
     }
