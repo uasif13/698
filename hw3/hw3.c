@@ -1,139 +1,167 @@
-/*
- * Mat Mult
- * CS698 GPU cluster programming - MPI + CUDA 
- * Spring 2025
- * template for HW1 - 3
- * HW1 - point to point communication
- * HW2 - collective communication
- * HW3 - one-sided communication
- * Andrew Sohn
- */
+/**
+ * @author RookieHPC
+ * @brief Original source code at https://rookiehpc.org/mpi/docs/mpi_init/index.html
+ **/
 
-#include <mpi.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <mpi.h>
 
-#define COLOR 1<<10
-#define MAXDIM 1<<12		/* 4096 */
-#define ROOT 0
+/**
+ * @brief Illustrates how to initialise the MPI environment.
+ **/
+void mat_multi(double *A, double *B, double *C, int n, int elms_to_comm) ;
+void output_matrix(double* array, int data_size);
+void init_data(double* array, int data_size);
+int check_result(double *C, double *D, int n);
 
-int mat_mult(double *A, double *B, double *C, int n, int n_local);
-void init_data(double* data, int data_size);
-void output_matrix(double* data, int data_size);
-void create_send_matrix(double* recv_matrix,double*orig_matrix,int elms_to_comm, int pid);
-int check_result(double*C, double*D, int n);
+int main(int argc, char* argv[])
+{
+    // Initilialise MPI and check its completion
+    MPI_Init(&argc, &argv);
 
-int main(int argc, char *argv[]) {
-  int i, n = 2,n_sq, flag, my_work;
-  int my_rank, num_procs = 2;
-  double *A, *B, *C, *D, *E;	/* D is for local computation, E is for buffers */
-  int addr_to_comm, elms_to_comm;
-  double start_time, end_time, elapsed;
+    // Get my rank
+    int comm_size;
+    MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
 
-  MPI_Comm world = MPI_COMM_WORLD;
-  
-  MPI_Init(&argc, &argv);
-  
+    // printf("%d Processes in  MPI environment.\n", comm_size);
 
-  MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
-  MPI_Comm_size(MPI_COMM_WORLD, &num_procs);
-  
-  if (argc > 1) {
-    n = atoi(argv[1]);
-    if (n>MAXDIM) n = MAXDIM;
-  }
-  n_sq = n * n;
-  
-  my_work  = n/num_procs;
-  elms_to_comm = my_work * n;
-  
-  A = (double *) malloc(sizeof(double) * n_sq);
-  B = (double *) malloc(sizeof(double) * n_sq);
-  C = (double *) malloc(sizeof(double) * n_sq);
-  D = (double *) malloc(sizeof(double) * n_sq);
-  E = (double *) malloc(sizeof(double) * n_sq);
+    int my_rank;
+    MPI_Comm_rank(MPI_COMM_WORLD,&my_rank);
 
-  start_time = MPI_Wtime();
-  if (my_rank == ROOT) {
-    printf("pid=%d: num_procs=%d n=%d my_work=%d\n",\
-	   my_rank, num_procs, n, my_work);
+    // printf("Process %d has initialised its MPI environment.\n", my_rank);
 
-	  init_data(A,n_sq);
-	  printf("Initial matrix");
-  	output_matrix(A,n_sq);
-	  init_data(B,n_sq);
-  } 	  
-  double * window_buffer;
-  MPI_Win window; 
-  MPI_Win_create(A, (MPI_Aint)n_sq*sizeof(double), sizeof(double), MPI_INFO_NULL, MPI_COMM_WORLD, &window);
-  // MPI_Win_fence(0,window);
-  printf("Window created");
-  
-  // window
+    int flag;
+    int addr_to_comm;
+    double start_time, end_time, elapsed;
+    int n = 2048;
+    const int n_sq = n*n;
+    // double window_buffer[n_sq];
+    double * window_buffer;
+    double *A, *B,*C, *D, *E, *F;
+    int my_work = n / comm_size;
+    int elms_to_comm = my_work * n;
 
-  double test;
-  if (my_rank != ROOT) {
-  
-    printf("pid=%d: num_procs=%d n=%d elms_to_comm=%d\n",my_rank, num_procs, n, elms_to_comm); 
- MPI_Get(&E,n_sq,MPI_DOUBLE,0,0, n_sq, MPI_DOUBLE, window);
- output_matrix(E,n_sq);
-  } 
- 
-  MPI_Win_free(&window);
- printf("Matrix E output rank %d\n",my_rank);
-  MPI_Finalize();
-  return 0;
-}
-void output_matrix(double *data, int datasize) {
-	for (int i = 0; i < datasize; i++) {
-		printf("%.1f ",data[i]);
-	}
-}
-
-int mat_mult(double *a, double *b, double *c, int n, int my_work) {
-  int i, j, k, sum=0;
-  for (i=0; i<my_work; i++) {
-    for (j=0; j<n; j++) {
-      sum=0;
-      for (k=0; k<n; k++)
-	sum = sum + a[i*n + k] * b[k*n + j];
-      c[i*n + j] = sum;
+    A = (double*) malloc(n_sq*sizeof(double));
+    B = (double*) malloc(n_sq*sizeof(double));
+    C = (double*) malloc(n_sq*sizeof(double));
+    D = (double*) malloc(n_sq*sizeof(double));
+    E = (double *) malloc(elms_to_comm*sizeof(double));
+    F = (double *) malloc(elms_to_comm*sizeof(double));
+    // window_buffer = (double*) malloc(n_sq*sizeof(double));
+    // init_data(window_buffer,n_sq);
+    if (my_rank == 0) {
+	    init_data(A,n_sq);
+	    printf("Initial A\n");
+	    // output_matrix(A,n_sq);
+	    init_data(B,n_sq);
+	    printf("Initial B\n");
+	    // output_matrix(B,n_sq);
     }
-  }
-  return 0;
-}
 
-/* Initialize an array with random data */
-void init_data(double *data, int data_size) {
-  for (int i = 0; i < data_size; i++)
-    data[i] = rand() & 0xf;
+    start_time = MPI_Wtime();
+    MPI_Win window;
+
+    /*if (my_rank == 1) {
+    	window_buffer[1] = 3.5;
+    }*/
+    MPI_Win_create(A, n_sq * sizeof(double),sizeof(double), MPI_INFO_NULL, MPI_COMM_WORLD, &window);
+    MPI_Win_fence(0,window);
+MPI_Get(C,n_sq,MPI_DOUBLE,0,0,n_sq,MPI_DOUBLE,window);
+    MPI_Win_fence(0,window);
+
+
+
+	double * my_value;
+	// my_value = (double *) malloc (3*sizeof(double));
+	// init_data(my_value,3);
+	// MPI_Put(my_value,3, MPI_DOUBLE,0,0,3,MPI_DOUBLE,window);
+	MPI_Get(E,elms_to_comm,MPI_DOUBLE,0,elms_to_comm*my_rank,elms_to_comm,MPI_DOUBLE,window);
+	MPI_Win_fence(0,window);
+
+	printf("MPI process 0: output array for %d\n",my_rank );
+	// output_matrix(E,elms_to_comm);
+
+	MPI_Bcast(B,n_sq,MPI_DOUBLE,0,MPI_COMM_WORLD);
+	// output_matrix(B,n_sq);
+
+	 mat_multi(E,B,F,n,elms_to_comm);
+	 printf("output matrix F\n");
+	 // output_matrix(F,elms_to_comm);
+	MPI_Win_fence(0,window);
+	 MPI_Put(F,elms_to_comm, MPI_DOUBLE,0,elms_to_comm*my_rank,elms_to_comm,MPI_DOUBLE,window);
+
+	 MPI_Win_fence(0,window);
+	 if (my_rank == 0) {
+	 
+	// printf("Output Array A\n");
+	// output_matrix(A,n_sq);
+	end_time = MPI_Wtime();
+	elapsed = end_time - start_time;
+	printf("Output Array C\n");
+	// output_matrix(C,n_sq);
+	printf("Output Array B\n");
+	// output_matrix(B,n_sq);
+	mat_multi(C,B,D,n,n_sq);
+	printf("Output Array D\n");
+	// output_matrix(D,n_sq);
+	printf("check result\n");
+	flag = check_result(A,D,n);
+	if (flag) printf("Test: FAILED\n");
+	else {
+		printf("Test: PASSED\n");
+		printf("Total time %d: %f seconds.\n",my_rank,elapsed);
+	}
+	 }
+	MPI_Win_fence(0,window);
+    MPI_Win_free(&window);
+
+    // Tell MPI to shut down.
+    MPI_Finalize();
+
+    return EXIT_SUCCESS;
 }
-void create_send_matrix(double* recv_matrix, double*orig_matrix, int elms_to_comm, int my_rank) {
-	for (int i = elms_to_comm*my_rank;i<elms_to_comm*(my_rank+1);i++) {
-		recv_matrix[i] = orig_matrix[i];
+void mat_multi(double *A, double *B, double *C, int n, int elms_to_comm) {
+	int count = 0 ;
+	for (int i = 0; i < elms_to_comm && count < elms_to_comm; i++) {
+		for (int j = 0 ; j < n && count < elms_to_comm; j++) {
+			int sum = 0;
+			for (int k = 0; k < n; k++) {
+				sum += A[i*n+k] * B[n*k+j];
+			}
+			C[i*n+j] = sum;
+			count ++;
+		}
+	}
+}
+void init_data(double* array, int data_size) {
+	for (int i = 0; i< data_size; i++) {
+		array[i] = 0xF &rand();
 	}
 }
 
-/* Compare two matrices C and D */
-int check_result(double *C, double *D, int n){
-  int i,j,flag=0;
-  double *cp,*dp;
+void output_matrix(double* array, int data_size) {
+	for (int i = 0; i < data_size; i++) {
+		printf("%.1f ",array[i]);
+	}
+	printf("\n");
+}
+// Compare two arrays
+int check_result(double *C, double *D, int n) {
+	int i,j,flag = 0;
+	double *cp, *dp;
 
-  cp = C;
-  dp = D;
+	cp = C;
+	dp = D;
 
-  for (i=0;i<n;i++) {
-    for (j=0;j<n;j++) {
-      if (*cp++ != *dp++) {
-	printf("ERROR: C[%d][%d]=%d != D[%d][%d]=%d\n",C[i*n + j],D[i*n + j]);
-	flag = 1;
+	for (i = 0; i < n; i++) {
+		for (j = 0; j < n; j++) {
+			if (*cp++ != *dp++) {
+				printf("ERROR: C[%d][%d] = %d != D[%d][%d]=%d\n",C[i*n+j],D[i*n+j]);
+				flag = 1;
+				return flag;
+			}
+		}
+	}
 	return flag;
-      }
-    }
-  }
-  return flag;
 }
-
-/*
-  End of file: template.c
- */
