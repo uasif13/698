@@ -30,23 +30,24 @@ int main(int argc, char* argv[])
 
     int n = 4;
     const int n_sq = n*n;
-    double window_buffer[n_sq];
-    // double * window_buffer;
+    // double window_buffer[n_sq];
+    double * window_buffer;
     double *A;
 
-    // A = (double*) malloc(n_sq*sizeof(double));
-    // window_buffer = (double*) malloc(n_sq*sizeof(double));
-    // init_data(A,n_sq);
+    A = (double*) malloc(n_sq*sizeof(double));
+    window_buffer = (double*) malloc(n_sq*sizeof(double));
+    init_data(window_buffer,n_sq);
+    init_data(A,n_sq);
 
     MPI_Win window;
 
-    if (my_rank == 1) {
+    /*if (my_rank == 1) {
     	window_buffer[1] = 3.5;
-    }
-    MPI_Win_create(window_buffer, n_sq * sizeof(double),sizeof(double), MPI_INFO_NULL, MPI_COMM_WORLD, &window);
+    }*/
+    MPI_Win_create(A, n_sq * sizeof(double),sizeof(double), MPI_INFO_NULL, MPI_COMM_WORLD, &window);
     MPI_Win_fence(0,window);
 
-    double remote_value;
+    double  remote_value;
     if (my_rank == 0) {
     	MPI_Get(&remote_value,1,MPI_DOUBLE,1,1,1,MPI_DOUBLE,window);
 
