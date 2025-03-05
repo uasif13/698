@@ -1,0 +1,3 @@
+n0 slots=2
+n1 slots=2
+
