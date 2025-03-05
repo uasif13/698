@@ -91,9 +91,7 @@ int vec_C[my_work], vec_D[my_work];
   if (my_rank == ROOT) {
   
 	  init_vec(vec_A, vec_size);
-	  output_vec(vec_A, vec_size);
 	  init_vec(vec_B, vec_size);
-	  output_vec(vec_B, vec_size);
   }
 
   gettimeofday(&timecheck, NULL);
@@ -123,6 +121,7 @@ int vec_C[my_work], vec_D[my_work];
   mpi_end = (long)timecheck.tv_sec * 1000 + (long)timecheck.tv_usec / 1000;
   mpi_elapsed = mpi_end - mpi_start;
 
+  MPI_Finalize();
   if (my_rank == 0) {
     gettimeofday(&timecheck, NULL);
     host_start = (long)timecheck.tv_sec * 1000 + (long)timecheck.tv_usec/ 1000;
@@ -131,11 +130,8 @@ int vec_C[my_work], vec_D[my_work];
     gettimeofday(&timecheck, NULL);
     host_end = (long)timecheck.tv_sec * 1000 + (long)timecheck.tv_usec/ 1000;
     host_elapsed = host_end - host_start;
- }
 
-  MPI_Finalize();
 
-  if (my_rank==0) {
       printf("prod_host%d == dev=%d\n\n",prod_host,prod_dev);
     if (prod_host == prod_dev) 
       printf("\nTest Host: PASS: host=%x == dev=%x\n\n",prod_host,prod_dev);
@@ -148,8 +144,8 @@ int vec_C[my_work], vec_D[my_work];
     printf("host time: rank=%d: %d procs: %ld msecs\n",
 	   my_rank, nprocs, host_elapsed);
     printf("************************************************\n");
-  }
 
+  }
   return 0;
 }
 
