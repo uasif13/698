@@ -75,20 +75,17 @@ __global__ void dot_prod_tree_reduction( int *a, int *b, int *c,int my_work, int
   // fill in
 	int i = threadIdx.x + blockIdx.x * blockDim.x;
 	c[i] = a[i] * b[i];
-	 printf("[tree reduction]prod: %d,thread: %d, block: %d,blockSize: %d\n",c[i],threadIdx.x, blockIdx.x, blockDim.x);
+//	 printf("[tree reduction]prod: %d,thread: %d, block: %d,blockSize: %d\n",c[i],threadIdx.x, blockIdx.x, blockDim.x);
 	__syncthreads();
-	if (threadIdx.x == 0) {
-		for (int j = 0 ; j < log_n; j++ ) {
-			for(int k = 0 ; k < my_work; k += pow(2,j+1)) {
-				int first = i+k;
-				int second = pow(2,j);
-				c[first] += c[first+second];
-				printf("index: %d first: %d second:%d accum: %d\n",k,first,second,c[first]  );
-			}
+	for (int j = 0 ; j < log_n; j++ ) {
+		int divisor = pow(2,j+1);
+		if (threadIdx.x % divisor == 0 ) {
+			int second = pow(2,j);
+			c[i] += c[i+second];
 		}
-		printf("thread 0 : %d, sum: %d\n",threadIdx.x, c[i]);
-	
 	}
+//	printf("thread 0 : %d, sum: %d\n",threadIdx.x, c[i]);
+	
 }
 
 // Thd 0 accumulates
