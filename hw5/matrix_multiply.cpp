@@ -1,0 +1,54 @@
+
+
+#include <iostream>
+#include <cmath>
+
+void output_vec(int*data, int datasize);
+
+
+void matrix_multiply(int *a, int* b, int*c, int n, int my_work){
+  output_vec(a,my_work);
+  for (int i = 0; i < my_work; i++){
+    int sum = 0;
+    int j = i/n*n;
+    int k = i%n;
+    while (j < (i/n*n)+n && k < n*n){
+      sum += a[j]*b[k];
+      printf("%d %d %d %d %d \n",j,k,a[j], b[k],sum);
+      j++;
+      k = k + n;
+
+    }
+    c[i] = sum;
+  }
+}
+
+void init_vec(int*data, int data_size){
+  for (int i = 0; i < data_size; i++){
+    data[i] = rand() & 0xF;
+  }
+}
+
+void output_vec(int* data, int data_size){
+  for (int i = 0; i < data_size; i++){
+    printf("%d ",data[i]);
+  }
+  printf("\n");
+}
+
+int main() {
+  int n = 4;
+  int my_work = 8;
+    int* a = new int[444];
+    int* b = new int[444];
+  printf("a\n");
+  init_vec(a,my_work);
+  output_vec(a,my_work);
+  init_vec(b,n*n);
+    printf("b\n");
+  output_vec(b,n*n);
+  int c[my_work];
+  matrix_multiply(a,b, c, n, my_work);
+    printf("c\n");
+  output_vec(c,my_work);
+}
