@@ -54,8 +54,8 @@ void init_mat(int *buf, int n) {
 
 int matrix_multiply(int *a, int *b, int *c, int n, int my_work) {
   printf("matrix multiply n: %d, my_work:%d\n", n,my_work);
-  output_vec(a,my_work);
-  output_vec(b,n*n);
+  //  output_vec(a,my_work);
+  //output_vec(b,n*n);
   int i, j, k, sum = 0;
   for (i = 0; i < my_work; i++){
    sum = 0;
@@ -132,24 +132,31 @@ int main(int argc, char *argv[]) {
     order = MIN_ORDER;
     tile_width = MIN_TILE_WIDTH;
   }
-  //  order = 2;
-  //  tile_width = 2;
-  //  nprocs = 2;
+
+
+
   n = 1 << order;
   bx_dim = tile_width;
   by_dim = bx_dim;
   gx_dim = n/bx_dim;
+  if (n%bx_dim != 0)
+	 gx_dim ++;
   gy_dim = n/(bx_dim*nprocs);
+  if (n%(bx_dim*nprocs) != 0)
+	 gy_dim ++;
   printf("rank=%d: order=%d n=%d: grid(%d,%d), block(%d,%d)\n",my_rank, order, n, gx_dim, gy_dim, bx_dim,by_dim);
-
-  my_work = n / nprocs;
+  int grid = gx_dim*bx_dim*gy_dim*bx_dim*nprocs;
+  my_work = grid / nprocs;
 
   printf("rank=%d: nprocs=%d n=%d my_work=%d/%d=%d\n",my_rank,nprocs,n,n,nprocs,my_work);
 
   n_sq = n*n;
+
   if (my_rank == ROOT){
-  init_mat(mat_A, n_sq);
+    init_mat(mat_A, n_sq);
+  printf("mat_A\n");
   output_vec(mat_A, n_sq);
+  printf("mat_B\n");  
   init_mat(mat_B, n_sq);
   output_vec(mat_B, n_sq);
   }
@@ -159,38 +166,37 @@ int main(int argc, char *argv[]) {
   gettimeofday(&timecheck, NULL);
   mpi_start = (long)timecheck.tv_sec * 1000 + (long)timecheck.tv_usec / 1000;
 
-  int worker_size = my_work*n;
 
-  int* mat_D = new int[worker_size];
-  int* mat_E = new int[worker_size];
+
+  int* mat_D = new int[my_work];
+  int* mat_E = new int[my_work];
 
   /* MPI_Scatter mat_A */
-
-  printf("my_rank %d, n_sq %d, worker_size %d\n",my_rank,n_sq,worker_size);
-  MPI_Scatter(mat_A, worker_size, MPI_INT, mat_D, worker_size, MPI_INT, ROOT, MPI_COMM_WORLD);
+  printf("my_rank %d, n_sq %d, worker_size %d\n",my_rank,n_sq,my_work);
+  MPI_Scatter(mat_A, my_work, MPI_INT, mat_D, my_work, MPI_INT, ROOT, MPI_COMM_WORLD);
   printf("mat D\n");
 
-  output_vec(mat_D,worker_size);
+  //output_vec(mat_D,worker_size);
 
   /* MPI_Bcast mat_B */
   MPI_Bcast(mat_B, n_sq, MPI_INT, ROOT, MPI_COMM_WORLD);
   printf("mat B\n");
-    output_vec(mat_B,n_sq);
+  output_vec(mat_B,n_sq);
 
    
   printf("mat multi\n");
-  //matrix_multiply(mat_D,mat_B,mat_E,n,worker_size);
-  //output_vec(mat_E,worker_size);
+
+
   printf("cuda mat multi\n");
     matrix_multiply_cuda(nprocs, my_rank, n, my_work, mat_D, mat_B, mat_E, gx_dim, gy_dim, bx_dim,by_dim);
             printf("mat E\n");
-    output_vec(mat_E,n_sq);
+	    //output_vec(mat_E,worker_size);
 
   /* MPI_Gather mat_C */
-  MPI_Gather(mat_E, worker_size, MPI_INT, mat_C, worker_size, MPI_INT, ROOT, MPI_COMM_WORLD );
+  MPI_Gather(mat_E, my_work, MPI_INT, mat_C, my_work, MPI_INT, ROOT, MPI_COMM_WORLD );
         printf("mat C\n");
 
-      output_vec(mat_C,n_sq);
+	//output_vec(mat_C,n_sq);
 
   gettimeofday(&timecheck, NULL);
   mpi_end = (long)timecheck.tv_sec * 1000 + (long)timecheck.tv_usec / 1000;
@@ -200,11 +206,11 @@ int main(int argc, char *argv[]) {
 
       printf("mat C\n");
 
-    output_vec(mat_C,n_sq);
+      //output_vec(mat_C,n_sq);
     gettimeofday(&timecheck, NULL);
     host_start = (long)timecheck.tv_sec * 1000 + (long)timecheck.tv_usec/ 1000;
     matrix_multiply(mat_A,mat_B,mat_C_host, n, n_sq);
-        output_vec(mat_C_host,n_sq);
+    //        output_vec(mat_C_host,n_sq);
     gettimeofday(&timecheck, NULL);
     host_end = (long)timecheck.tv_sec * 1000 + (long)timecheck.tv_usec/ 1000;
     host_elapsed = host_end - host_start;

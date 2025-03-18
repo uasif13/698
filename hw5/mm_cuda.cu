@@ -41,7 +41,7 @@ int matrix_multiply_cpu(int my_rank,int *a, int *b, int *c, int n, int my_work) 
     	sum = 0;
 	j = (i/n)*n;
 	k = i%n;
-//	printf("%d %d\n", j, k);
+
 	while (j < (i/n)*n+n && k < n*n){
 	      sum += a[j]*b[k];
 	      j ++;
@@ -77,75 +77,55 @@ __global__ void mat_mult_cuda(int my_rank, int a_width,int my_work, int *d_a, in
  */
 	extern	__shared__ int a_shared[];
 	extern __shared__ int b_shared[];
-
-	// a_width x a_width
-	int n_sq = a_width * a_width;
-/*	tile_width = by_dim * gy_dim
-	____
-	|  |	tile_height = bx_dim*gx_dim
-	____
-	
-*/
-	int num_tiles_per_row = a_width/tile_width;
-	if (a_width%tile_width != 0) {
-	   num_tiles_per_row++;
-	}
+	int shift = my_rank*my_work;
+	int n_sq = a_width*a_width;
 	int i = blockIdx.x*blockDim.x+threadIdx.x;
 	int j = blockIdx.y*blockDim.y+threadIdx.y;
-	printf("%d\n",blockIdx.x* blockDim.x);
+			
+	int index = i+j*a_width;
 
-	// tiled row
-	int r = my_rank/num_tiles_per_row;
-	// tiled col
-	int c = my_rank%num_tiles_per_row;
-	int tile_height = a_width/(blockDim.x*blockIdx.x);
-	// tiled row*tile_height+tiled_col*tile_width = top left of tile
+	// does not include zeros
+	if (shift/a_width+j < a_width)
+	   for (int n = j*a_width ; n < (j+1)*a_width; n++){
+		a_shared[n] = d_a[n];
+		}
+	    	 
 	
-	if (i == 0 && j == 0) {
-	   for (int m = 0; m < tile_width; m++) {
-	       for (int n = 0; n < tile_height; n++) {
-	       	int shared_index = r*tile_height+m*a_width+c*tile_width+n;
-		int a_index = m*tile_width+n;
-		int b_index = shared_index;
-		printf("shared pointers: %d %d %d %d %d %d %d\n",i,j,r,c, shared_index, a_index, b_index);
-		a_shared[shared_index] = d_a[a_index];
-		b_shared[shared_index] = d_b[b_index];
 
-	       }
+
+	// does not include zeros
+	for (int k = i; k < n_sq; k=k+a_width)
+	    b_shared[my_work+k] = d_b[k];
+
+	printf("%d %d: %d\n", i, j, index);	
+	if (i == 0 && j == 0){
+	   printf("length of a: %d\n",my_work);
+	   for (int m = 0; m < a_width; m++)
+	          printf("a_shared: %d ",a_shared[m]);
 	   }
-	}
-	/*
 
-
-
-	*/
 	
 	__syncthreads();
+	if (i == 0 && j == 0){
+	   for (int m = 0; m < a_width * a_width; m=m+a_width)
+	       printf("b_shared: %d ",b_shared[m]);
+	   }
 
-	if (i == 0 && j == 0 && my_rank == 0) {
-		for (int a = 0; a < 16; a++) {
-			printf("a:%d avalue: %d\n",a, a_shared[a]);
-			printf("b:%d bvalue: %d\n",a, b_shared[a]);
-		}
+	__syncthreads();
+	int sum = 0;
+	for (int l = 0; l < a_width; l++){
+	    int a_index = index/a_width*a_width+l;
+	    int b_index = index%a_width+l*a_width;
+	    if (shift+a_index < n_sq && b_index < n_sq)
+	       sum = sum + a_shared[a_index]*b_shared[my_work+b_index];
+	    if (i == 0 && j == 0) {
+	        printf("%d %d %d: %d\n", index, a_index, b_index, sum);
+	    }
 
-		}
-		    int sum = 0;
-   	
-	
-		    int k = 0, l = 0;
-		    printf("matmulti row and col %d %d %d\n", r, c,i*tile_width+j);
-		    while (k < r+a_width &&l< a_width*a_width){
-		    	  int as_index = r*tile_height+i*a_width+k;
-			  int bs_index = l+c*tile_width+j;
-			  printf("inner row, col, index, k,l,sum %d,%d,%d %d %d %d %d %d\n",r, c, tile_width*i+j, k,l,sum,a_shared[as_index],b_shared[bs_index]);
-			  sum += a_shared[as_index]*b_shared[bs_index];
-			  l = l +a_width;
-			  k ++;
-
-			  }
-			   d_c[i*tile_width+j] = sum;
-			  printf("%d ",d_c[i*tile_width+j]);
-	
+	     
+	  
+	}
+	d_c[index] = sum;
 	}
 
 void print_lst_cpu(int name,int rank,int n, int *l){
@@ -177,8 +157,9 @@ int matrix_multiply_cuda(int nprocs, int my_rank,int n, int my_work,int *h_A,int
   printf("\n");
   }
 
-  unsigned int my_work_size = sizeof(int) * my_work * n;
-  unsigned int mat_size = sizeof(int) * n * n;
+
+  unsigned int my_work_size = sizeof(int) * my_work;
+  unsigned int mat_size = sizeof(int) * my_work*nprocs;
   printf("rank=%d: my_work=%d data_size=%d bytes\n",my_rank,my_work,my_work_size);
 
   long dev_start, dev_end, dev_elapsed;
@@ -196,13 +177,17 @@ int matrix_multiply_cuda(int nprocs, int my_rank,int n, int my_work,int *h_A,int
 
   by_dim = bx_dim;
   gx_dim = n/bx_dim;
+  if (n%bx_dim != 0)
+     gx_dim ++;
   gy_dim = n/(bx_dim*nprocs);
+  if (n%(bx_dim*nprocs)!= 0)
+     gy_dim ++;
 
   printf("bx_dim:%d by_dim:%d gx_dim:%d gy_dim:%d \n",bx_dim, by_dim,gx_dim,gy_dim);
   dim3 grid(gx_dim,gy_dim);
   dim3 threads(bx_dim,by_dim);
 
-  mat_mult_cuda<<<grid,threads,n*n>>>(my_rank,n,my_work,d_A, d_B, d_C,by_dim);
+  mat_mult_cuda<<<grid,threads,my_work_size>>>(my_rank,n,my_work,d_A, d_B, d_C,by_dim);
 
   cudaMemcpy(h_C,d_C,my_work_size, cudaMemcpyDeviceToHost);
 
@@ -215,12 +200,12 @@ int matrix_multiply_cuda(int nprocs, int my_rank,int n, int my_work,int *h_A,int
 
   fflush(stdout);
     printf("vector D with size %d\n", n*my_work);
-  output_vector(h_A,n*my_work);
+//  output_vector(h_A,n*my_work);
   printf("vector C with size %d\n", n*my_work);
-  output_vector(h_C,n*my_work);
+  //output_vector(h_C,n*my_work);
   matrix_multiply_cpu(my_rank,h_A,h_B,h_C_on_cpu,n,my_work);
   printf("vector C_on_cpu with size %d\n", n*my_work);
-  output_vector(h_C_on_cpu,n*my_work);
+ // output_vector(h_C_on_cpu,n*my_work);
   if (compare_cpu(my_rank,h_C_on_cpu,h_C,n,my_work)) /* h_C is from dev */
     printf("\nrank=%d: Test CPU: PASS: host == dev\n", my_rank);
   else

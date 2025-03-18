@@ -15,11 +15,21 @@ using std::endl;
 #include <unistd.h>
 #include <sys/time.h>
 
-#define TILE_WIDTH 4
+#define MIN_TILE_WIDTH 4
 #define MAX_TILE_WIDTH 16
 #define THREADS_PER_BLOCK 256
+#define MIN_ORDER 6
+#define MAX_ORDER 10
+#define MIN_N 1<<MIN_ORDER
+#define MAX_N 1<<MAX_ORDER
+#define MAX_PROCS 32
 
 #define MAX_BUF_SIZE 1<<25
+#define MIN_BLOCK 32
+#define MAX_BLOCK 512
+
+#define MIN_THREADS_PER_BLOCK 32
+#define MAX_THREADS_PER_BLOCK 512
 
 void init_vec(int * data, int data_size);
 void output_vec(int * data, int data_size);
@@ -48,26 +58,36 @@ __global__ void mat_mult_cuda(int my_rank, int n, int my_work, int*d_A, int*d_B,
 
 	   int i = blockIdx.x*blockDim.x+threadIdx.x;
 	   int j = blockIdx.y*blockDim.y+threadIdx.y;
-	   int index = i*n+j;
+	   int index = i*tile_width+j;
 	   printf("%d %d: %d\n",i,j,index);
 	   extern __shared__ int a_shared[];
 	   a_shared[index] = d_A[index];
 	   __syncthreads();
 	   
-   	   extern __shared__ int b_shared[];	   
-	   b_shared[my_work*n+index] = d_B[index];
-	   __syncthreads();
+   	   extern __shared__ int b_shared[];
+	   for (int k = 0; k < n*n; k++){
+	   	   b_shared[my_work*n+k] = d_B[k];
 
-	   d_C[index] = b_shared[my_work*n+index]+a_shared[index];
+	   }
+
+
+	   __syncthreads();
+	   int sum = 0;
+	   // matrix multiply the grid not the array
+	   for (int l = 0; l < my_work*n/tile_width; l++){
+	       int a_index = index/n*n+l;
+	       int b_index = index%n+l*n;
+	       printf("%d %d %d %d\n",index,a_index,b_index,sum);
+	       sum = sum+ a_shared[a_index] * b_shared[my_work*n+b_index];
+	   }
+	   d_C[index] = sum;
+
+
 	   
 }
 
 int matrix_multiply_cuda(int nprocs, int my_rank, int n, int my_work, int *h_A, int *h_B, int *h_C, int gx_dim, int gy_dim, int bx_dim, int by_dim) {
-    int cuda_prod = 0;
-    int *d_A, *d_B, *d_C;
-
-    unsigned int my_work_size = sizeof(int) * my_work * n;
-    unsigned int mat_size = sizeof(int) * n *n;
+    int* d_A, *d_B,*d_C;
 
     cudaMalloc(reinterpret_cast<void**>(&d_A), my_work_size);
     cudaMalloc(reinterpret_cast<void**>(&d_B), mat_size);
@@ -77,7 +97,9 @@ int matrix_multiply_cuda(int nprocs, int my_rank, int n, int my_work, int *h_A, 
     cudaMemcpy(d_B, h_B, mat_size, cudaMemcpyHostToDevice);
 
     dim3 grid(gx_dim, gy_dim);
-    dim3 threads(bx_dim,gy_dim);
+    dim3 threads(bx_dim,by_dim);
+
+    printf("%d %d, %d %d",gx_dim, gy_dim, bx_dim, by_dim);
 
     mat_mult_cuda<<<grid,threads,sizeof(int)*n*my_work>>>(my_rank,n,my_work, d_A,d_B,d_C,by_dim);
 
@@ -86,7 +108,6 @@ int matrix_multiply_cuda(int nprocs, int my_rank, int n, int my_work, int *h_A, 
     for (int i = 0; i < n*n; i++)
     	printf("%d %d -> %d\n",h_A[i],h_B[i],h_C[i]);
 
-
     cudaFree((void*)d_A);
     cudaFree((void*)d_B);
     cudaFree((void*)d_C);
@@ -94,14 +115,16 @@ int matrix_multiply_cuda(int nprocs, int my_rank, int n, int my_work, int *h_A, 
 
 }
  int main(void) {
-     int nprocs = 5;
+     int order = 3;
+     int tile_width = 4;
+     int nprocs = 2;
      int my_rank = 3;
-     int n = 4;
-     int my_work = 2;
-     int bx_dim = 2;
-     int by_dim = 2;
-     int gx_dim = 2;
-     int gy_dim = 2;
+     int n = 1<<order;
+     int my_work = n/nprocs;
+     int bx_dim = tile_width;
+     int by_dim = bx_dim;
+     int gx_dim = n/bx_dim;
+     int gy_dim = n/(bx_dim*nprocs);
 
      int* d = new int[n*n];
      int* e = new int[n*n];
