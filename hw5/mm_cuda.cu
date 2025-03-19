@@ -83,14 +83,15 @@ __global__ void mat_mult_cuda(int my_rank, int a_width,int my_work, int *d_a, in
 	int j = blockIdx.y*blockDim.y+threadIdx.y;
 			
 	int index = i+j*a_width;
-
 //	printf("kernel index %d a_width: %d\n", index, a_width);
+
 	// includes zeros
 	   for (int n = j*a_width ; n < (j+1)*a_width; n++){
 		a_shared[n] = d_a[n];
 		if (index == 0)
 		   printf("index 0, a_shared: %d\n",a_shared[n]);
 		   }
+
 
 
 	// includes zeros
