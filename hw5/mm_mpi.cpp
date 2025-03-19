@@ -47,9 +47,31 @@ extern "C" {
 int mat_A[MAX_BUF_SIZE], mat_B[MAX_BUF_SIZE], mat_C[MAX_BUF_SIZE];
 int mat_C_host[MAX_BUF_SIZE];
 void output_vec(int* data, int datasize);
-void init_mat(int *buf, int n) {
+void init_mat(int *buf, int n, int gx,int gy) {
   srand(time(NULL));
-  for (int i = 0; i < n; i++) *buf++ = rand() & 0xf;
+  for (int i = 0; i < gx*gy; i++) {
+    int row = i/gx;
+    int col = i%gx;
+    if (row >= n || col >= n)
+      *buf++ = 0;
+    else
+      *buf++ = rand() & 0xf;      
+  }
+}
+
+void rm_padding(int*buf, int n , int gx, int gy) {
+  int index = 0;
+  int ptr = 0;
+  while (ptr < gx*gy && index < n *n){
+    //    printf("ptr %d index %d\n",ptr,index);
+    int row = ptr / gx;
+    int col = ptr% gx;
+    if (row < n && col < n){
+      buf[index] = buf[ptr];
+      index ++;
+    }
+    ptr ++;
+  }
 }
 
 int matrix_multiply(int *a, int *b, int *c, int n, int my_work) {
@@ -151,14 +173,16 @@ int main(int argc, char *argv[]) {
   printf("rank=%d: nprocs=%d n=%d my_work=%d/%d=%d\n",my_rank,nprocs,n,n,nprocs,my_work);
 
   n_sq = n*n;
+  int gx = gx_dim*bx_dim;
+  int gy = gy_dim*by_dim*nprocs;
 
   if (my_rank == ROOT){
-    init_mat(mat_A, n_sq);
+    init_mat(mat_A, n, gx, gy);
   printf("mat_A\n");
-  output_vec(mat_A, n_sq);
+  output_vec(mat_A, grid);
   printf("mat_B\n");  
-  init_mat(mat_B, n_sq);
-  output_vec(mat_B, n_sq);
+  init_mat(mat_B, n, gx, gy);
+  output_vec(mat_B, grid);
   }
 
   
@@ -179,9 +203,9 @@ int main(int argc, char *argv[]) {
   //output_vec(mat_D,worker_size);
 
   /* MPI_Bcast mat_B */
-  MPI_Bcast(mat_B, n_sq, MPI_INT, ROOT, MPI_COMM_WORLD);
+  MPI_Bcast(mat_B, grid, MPI_INT, ROOT, MPI_COMM_WORLD);
   printf("mat B\n");
-  output_vec(mat_B,n_sq);
+  output_vec(mat_B,grid);
 
    
   printf("mat multi\n");
@@ -205,12 +229,15 @@ int main(int argc, char *argv[]) {
   if (my_rank == 0) {
 
       printf("mat C\n");
-
-      //output_vec(mat_C,n_sq);
+      //output_vec(mat_C,grid);      
+      rm_padding(mat_A,n,gx,gy);
+      rm_padding(mat_B,n,gx,gy);      
+      rm_padding(mat_C,n,gx,gy);
+      output_vec(mat_C,n_sq);
     gettimeofday(&timecheck, NULL);
     host_start = (long)timecheck.tv_sec * 1000 + (long)timecheck.tv_usec/ 1000;
     matrix_multiply(mat_A,mat_B,mat_C_host, n, n_sq);
-    //        output_vec(mat_C_host,n_sq);
+        output_vec(mat_C_host,n_sq);
     gettimeofday(&timecheck, NULL);
     host_end = (long)timecheck.tv_sec * 1000 + (long)timecheck.tv_usec/ 1000;
     host_elapsed = host_end - host_start;

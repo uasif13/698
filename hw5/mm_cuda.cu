@@ -37,7 +37,7 @@ extern "C" {
 void output_vector(int* data, int datasize);
 int matrix_multiply_cpu(int my_rank,int *a, int *b, int *c, int n, int my_work) {
     int i, j, k, sum = 0;
-    for (i = 0; i < my_work*n; i ++){
+    for (i = 0; i < my_work; i ++){
     	sum = 0;
 	j = (i/n)*n;
 	k = i%n;
@@ -58,7 +58,8 @@ int compare_cpu(int my_rank, int *host, int *dev, int n, int my_work) {
 
   for (i=0; i<my_work; i++) {
     for (j=0; j<n; j++) {
-      idx = i*my_work + j;
+      idx = i*n + j;
+      printf("index %d dev %d host %d\n",idx,dev[idx],host[idx]);
       if (dev[idx] != host[idx]) {
 	printf("DIFFERENT: rank=%d: dev[%d][%d]=%d != host[%d][%d]=%d\n", \
 	       my_rank,i,j,dev[idx],i,j,host[idx]);
@@ -78,13 +79,10 @@ __global__ void mat_mult_cuda(int my_rank, int a_width,int my_work, int *d_a, in
 	extern	__shared__ int a_shared[];
 	extern __shared__ int b_shared[];
 
-	int grid = a_width*a_width;
 	int i = blockIdx.x*blockDim.x+threadIdx.x;
 	int j = blockIdx.y*blockDim.y+threadIdx.y;
-			
-	int index = i+j*a_width;
-//	printf("kernel index %d a_width: %d\n", index, a_width);
 
+	int index = i+j*a_width;
 	// includes zeros
 	   for (int n = j*a_width ; n < (j+1)*a_width; n++){
 		a_shared[n] = d_a[n];
@@ -95,7 +93,7 @@ __global__ void mat_mult_cuda(int my_rank, int a_width,int my_work, int *d_a, in
 
 
 	// includes zeros
-	for (int k = 0; k < 18; k++){
+	for (int k = 0; k < a_width; k++){
 	    b_shared[my_work+k*a_width+i] = d_b[k*a_width+i];
 	    if (index == 0)
 	       printf("index 0, k: %d, b_shared: %d\n",k, b_shared[my_work+k*a_width+i]);
@@ -117,6 +115,8 @@ __global__ void mat_mult_cuda(int my_rank, int a_width,int my_work, int *d_a, in
 	  
 	}
 	d_c[index] = sum;
+	printf("kernel index: %d a_width %d sum %d\n", index,a_width,sum);				
+	
 	}
 
 void print_lst_cpu(int name,int rank,int n, int *l){
@@ -178,7 +178,7 @@ int matrix_multiply_cuda(int nprocs, int my_rank,int n, int my_work,int *h_A,int
   dim3 grid(gx_dim,gy_dim);
   dim3 threads(bx_dim,by_dim);
 
-  mat_mult_cuda<<<grid,threads,my_work_size>>>(my_rank,n,my_work,d_A, d_B, d_C,by_dim);
+  mat_mult_cuda<<<grid,threads,my_work_size>>>(my_rank,bx_dim*gx_dim,my_work,d_A, d_B, d_C,by_dim);
 
   cudaMemcpy(h_C,d_C,my_work_size, cudaMemcpyDeviceToHost);
 
@@ -190,14 +190,14 @@ int matrix_multiply_cuda(int nprocs, int my_rank,int n, int my_work,int *h_A,int
 	   my_rank, nprocs, dev_elapsed);
 
   fflush(stdout);
-    printf("vector D with size %d\n", n*my_work);
-//  output_vector(h_A,n*my_work);
-  printf("vector C with size %d\n", n*my_work);
-  //output_vector(h_C,n*my_work);
-  matrix_multiply_cpu(my_rank,h_A,h_B,h_C_on_cpu,n,my_work);
-  printf("vector C_on_cpu with size %d\n", n*my_work);
- // output_vector(h_C_on_cpu,n*my_work);
-  if (compare_cpu(my_rank,h_C_on_cpu,h_C,n,my_work)) /* h_C is from dev */
+    printf("vector D with size %d\n", my_work);
+//  output_vector(h_A,my_work);
+  printf("vector C with size %d\n", my_work);
+ output_vector(h_C,my_work);
+  matrix_multiply_cpu(my_rank,h_A,h_B,h_C_on_cpu,gx_dim*bx_dim,my_work);
+  printf("vector C_on_cpu with size %d\n", my_work);
+  output_vector(h_C_on_cpu,my_work);
+  if (compare_cpu(my_rank,h_C_on_cpu,h_C,n,my_work/n)) /* h_C is from dev */
     printf("\nrank=%d: Test CPU: PASS: host == dev\n", my_rank);
   else
     printf("\nrank=%d: Test CPU: FAIL: host != dev\n", my_rank);
