@@ -77,47 +77,48 @@ __global__ void mat_mult_cuda(int my_rank, int a_width,int my_work, int *d_a, in
  */
 	extern	__shared__ int a_shared[];
 	extern __shared__ int b_shared[];
-	int shift = my_rank*my_work;
-	int n_sq = a_width*a_width;
+
+	int grid = a_width*a_width;
 	int i = blockIdx.x*blockDim.x+threadIdx.x;
 	int j = blockIdx.y*blockDim.y+threadIdx.y;
 			
 	int index = i+j*a_width;
-
-	// does not include zeros
-	if (shift/a_width+j < a_width)
+<<<<<<< Updated upstream
+//	printf("kernel index %d a_width: %d\n", index, a_width);
+=======
+	printf("kernel index %d a_width: %d\n", index, a_width);
+>>>>>>> Stashed changes
+	// includes zeros
 	   for (int n = j*a_width ; n < (j+1)*a_width; n++){
 		a_shared[n] = d_a[n];
-		}
+		if (index == 0)
+		   printf("index 0, a_shared: %d\n",a_shared[n]);
+		   }
+<<<<<<< Updated upstream
+=======
 	    	 
 	
 
+>>>>>>> Stashed changes
 
-	// does not include zeros
-	for (int k = i; k < n_sq; k=k+a_width)
-	    b_shared[my_work+k] = d_b[k];
+	// includes zeros
+	for (int k = 0; k < 18; k++){
+	    b_shared[my_work+k*a_width+i] = d_b[k*a_width+i];
+	    if (index == 0)
+	       printf("index 0, k: %d, b_shared: %d\n",k, b_shared[my_work+k*a_width+i]);
+	       }
+<<<<<<< Updated upstream
+=======
 
-	printf("%d %d: %d\n", i, j, index);	
-	if (i == 0 && j == 0){
-	   printf("length of a: %d\n",my_work);
-	   for (int m = 0; m < a_width; m++)
-	          printf("a_shared: %d ",a_shared[m]);
-	   }
-
-	
-	__syncthreads();
-	if (i == 0 && j == 0){
-	   for (int m = 0; m < a_width * a_width; m=m+a_width)
-	       printf("b_shared: %d ",b_shared[m]);
-	   }
+>>>>>>> Stashed changes
 
 	__syncthreads();
 	int sum = 0;
 	for (int l = 0; l < a_width; l++){
 	    int a_index = index/a_width*a_width+l;
 	    int b_index = index%a_width+l*a_width;
-	    if (shift+a_index < n_sq && b_index < n_sq)
-	       sum = sum + a_shared[a_index]*b_shared[my_work+b_index];
+	    if (a_shared[a_index] != 0)
+	    	    sum = sum + a_shared[a_index]*b_shared[my_work+b_index];
 	    if (i == 0 && j == 0) {
 	        printf("%d %d %d: %d\n", index, a_index, b_index, sum);
 	    }
