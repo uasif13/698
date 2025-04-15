@@ -1,0 +1,12 @@
+broadcast same graph
+- redistribute frontier
+
+single direction- unweighted
+bfs
+
+weighted edges - weighted vertex
+1000 threads
+1m to 1b - break it
+
+graph generators
+

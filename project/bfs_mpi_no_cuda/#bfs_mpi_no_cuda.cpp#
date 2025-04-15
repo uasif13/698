@@ -1,0 +1,370 @@
+/*
+  bfs mpi no cuda
+  compile: mpicxx -o bfs bfs_mpi_no_cuda.cpp
+  run: mpirun -n <nprocs> bfs <no_of_nodes> <start_node> <end_node> <percent>
+ */
+
+#include <mpi.h>
+#include <cmath>
+#include <math.h>
+#include <climits>
+#include <vector>
+#include <array>
+#include <iostream>
+#include <sys/time.h>
+#include <random>
+
+using namespace std;
+using std::cout;
+using std::cerr;
+using std::endl;
+
+#define MASTER 0
+#define ROOT 0
+
+#define MAX_BUF_SIZE 1<<25
+int srcPtrsBuf[MAX_BUF_SIZE], dstBuf[MAX_BUF_SIZE], srcPtrs_sizebuf[1], dst_sizebuf[1], levelBuf[MAX_BUF_SIZE], nVVBuf[MAX_BUF_SIZE];
+
+void output_vec(int * data, int data_size) {
+  for (int i = 0; i < data_size; i++)
+   printf("%d ", data[i]);
+  printf("\n");
+}
+class CSR {
+   public:
+      int* srcPtrs;
+      int srcPtrs_size;
+      int* dst;
+      int dst_size;
+  CSR(int no_of_nodes, float percent) {
+    random_device rd;
+    mt19937 gen(rd());
+    uniform_real_distribution<> dis(0.0,1/percent);
+    vector<int> v_srcPtrs;
+    vector<int> v_dst;
+    int row, col, edge;
+    for (int i = 0; i < no_of_nodes * no_of_nodes; i++) {
+      row = i / no_of_nodes;
+      col = i % no_of_nodes;
+
+      edge = dis(gen) < 1 ? 1 : 0;
+
+      if (edge != 0) {
+
+	if (row == v_srcPtrs.size()) {
+	  v_srcPtrs.push_back(v_dst.size());
+	}
+	v_dst.push_back(col);
+      }
+      if (col == no_of_nodes - 1 && row == v_srcPtrs.size())
+	v_srcPtrs.push_back(v_dst.size());
+    }
+    v_srcPtrs.push_back(v_dst.size());
+    srcPtrs_size = v_srcPtrs.size();
+    dst_size = v_dst.size();
+    srcPtrs_sizebuf[0] = srcPtrs_size;
+    dst_sizebuf[0] = dst_size;
+    srcPtrs = new int[srcPtrs_size];
+    dst = new int[dst_size];
+    for (int i = 0; i < srcPtrs_size; i++ ) {
+      srcPtrs[i] = v_srcPtrs[i];
+      srcPtrsBuf[i] = srcPtrs[i];
+    }  
+    for (int i = 0; i < dst_size; i++) {
+      dst[i] = v_dst[i];
+      dstBuf[i] = dst[i];
+    }
+    
+  }
+      CSR(int * graph, int no_of_nodes){
+      	  vector<int> v_srcPtrs;
+	  vector<int> v_dst;
+	  v_srcPtrs.push_back(0);
+	  for (int i = 0; i < no_of_nodes*no_of_nodes; i ++) {
+
+      	      int row = i / no_of_nodes;
+	      int col = i % no_of_nodes;
+	      if (graph[i] != 0){
+		 // new row
+		 if (row == v_srcPtrs.size()) {
+		    v_srcPtrs.push_back(v_dst.size());
+		 }
+		 v_dst.push_back(col);
+	      }
+	      if (col == no_of_nodes - 1 && row == v_srcPtrs.size())
+	      	 v_srcPtrs.push_back(v_dst.size());
+	  }
+	  v_srcPtrs.push_back(v_dst.size());
+	  srcPtrs_size = v_srcPtrs.size();
+	  srcPtrs = new int[srcPtrs_size];
+	  dst_size = v_dst.size();
+	  dst = new int[dst_size];
+	  for (int i = 0; i < srcPtrs_size; i++){
+	      srcPtrs[i] = v_srcPtrs[i];
+	  }
+	  for (int i = 0; i < dst_size; i ++){
+	      dst[i] = v_dst[i];
+	  }
+      }
+};
+bool checkNVV(int nprocs) {
+  for (int i = 0; i < nprocs; i++) {
+    if (nVVBuf[i] == 1)
+      return true;
+  }
+  return false;
+    
+}
+void bfs(int my_rank, int my_work, int no_of_nodes, int end_node, bool newVertexVisited, int nprocs, int currLevel) {
+  printf("rank: %d\n", my_rank);
+  printf("my_work: %d\n", my_work);
+    printf("check frontier\n");
+    for (int i = 0; i < my_work; i ++) {
+      if (levelBuf[i+my_rank*my_work] == currLevel -1) {
+	int start = srcPtrsBuf[my_rank*my_work+i];
+	int end = srcPtrsBuf[my_rank*my_work+i+1];
+	printf("start: %d end: %d\n", start, end);
+	for (int j = start; j < end; j++ ) {
+	  int neighbor = dstBuf[j];
+	  printf("neighbor: %d, level: %d\n", neighbor, levelBuf[neighbor]);
+	  if (levelBuf[neighbor] == INT_MAX) {
+	    printf("neighbor: %d, level: %d\n", neighbor, levelBuf[neighbor]);
+	    levelBuf[neighbor] = currLevel;
+	    nVVBuf[my_rank] = 1;
+	    printf("neighbor: %d, level: %d, nVV: %d\n", neighbor, levelBuf[neighbor], nVVBuf[my_rank]);
+	  }
+	}
+      }
+    }
+}
+
+/*void bfs (int * pfrontier, int my_rank, int no_of_nodes, int pf_count) {
+  int * nfrontier = new int[no_of_nodes];
+  int start, end;
+  for (int i = 0; i < no_of_nodes; i++) {
+    if (pfrontier[i] == 1) {
+      start = srcPtrsBuf[i];
+      end = srcPtrsBuf[i+1];
+      for (int j = start; j < end; j ++ ) {
+	  nfrontier[dstBuf[j]] = 1;
+      }
+    }
+  }
+  output_vec(nfrontier, no_of_nodes);
+  for (int i = 0; i < no_of_nodes; i ++)
+    pfrontier[i] = nfrontier[i];
+}
+*/
+
+void init_vec(int * data, int data_size) {
+  for (int i = 0; i < data_size; i ++)
+    data[i]=0;
+}
+
+
+
+
+int main(int argc, char * argv[]) {
+  int my_work, my_rank, nprocs;
+  int no_of_nodes;
+
+  CSR * csr;
+
+  int start_node, end_node;
+  float percent;
+  int * srcPtrs;
+  int * dst;
+  int srcPtrs_size;
+  int dst_size;
+
+  long bfs_start, bfs_end, bfs_elapsed;
+
+  struct timeval timecheck;
+  
+  int * level;
+  int nVV;
+
+  int bfs_result = -1;
+  
+  MPI_Comm world = MPI_COMM_WORLD;
+  
+  MPI_Init(&argc, &argv);
+
+  MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
+  MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
+
+  if (argc == 5) {
+    int i = 1;
+    no_of_nodes = atoi(argv[i++]);
+    start_node = atoi(argv[i++]);
+    end_node = atoi(argv[i++]);
+    percent = atof(argv[i++]);
+  } else {
+    no_of_nodes = 10;
+    start_node = 0;
+    end_node = no_of_nodes -1;
+    percent = 0.2;
+  }
+  if (start_node >= no_of_nodes || end_node >= no_of_nodes || start_node < 0 || end_node < 0) {
+    printf("Error: start_node %d or end_node %d has to be valid node[0-%d]\n", start_node, end_node, no_of_nodes-1);
+  }  
+
+
+  if (my_rank == ROOT) {
+    csr = new CSR(no_of_nodes, percent);
+    srcPtrs_size = csr -> srcPtrs_size;
+    dst_size = csr -> dst_size;
+
+    for (int i = 0; i < no_of_nodes; i++) {
+      if (i != start_node)
+	levelBuf[i] = INT_MAX;
+      else
+	levelBuf[i] = 0;
+    }
+  }
+
+  my_work = no_of_nodes/nprocs;
+  if (no_of_nodes%nprocs != 0)
+    my_work++;
+  
+  MPI_Bcast(srcPtrsBuf, srcPtrs_size, MPI_INT, ROOT, MPI_COMM_WORLD);
+  MPI_Bcast(dstBuf, dst_size, MPI_INT, ROOT, MPI_COMM_WORLD);
+  MPI_Bcast(srcPtrs_sizebuf, 1, MPI_INT, ROOT, MPI_COMM_WORLD);
+  MPI_Bcast(dst_sizebuf, 1, MPI_INT, ROOT, MPI_COMM_WORLD);
+  MPI_Bcast(levelBuf, no_of_nodes, MPI_INT, ROOT, MPI_COMM_WORLD);
+
+  nVVBuf[my_rank] = 1;
+  MPI_Scatter(nVVBuf,1, MPI_INT, &nVV, 1, MPI_INT, ROOT, MPI_COMM_WORLD);
+  MPI_Scatter(levelBuf, my_work, MPI_INT, level, my_work, MPI_INT, ROOT, MPI_COMM_WORLD);
+  MPI_Barrier(MPI_COMM_WORLD);
+  
+  printf("my_rank: %d nprocs: %d no_of_nodes: %d\n", my_rank, nprocs, no_of_nodes);
+  
+  printf("graph\n");
+  output_vec(srcPtrsBuf,srcPtrs_sizebuf[0]);
+  output_vec(dstBuf,dst_sizebuf[0]);
+  output_vec(level, my_work);
+  printf("start_node: %d, end_node: %d nvv: %d\n", start_node, end_node, nVV);
+
+  
+  gettimeofday(&timecheck, NULL);
+  bfs_start = (long) timecheck.tv_sec*1000 + (long)timecheck.tv_usec / 1000;
+  int currLevel = 1;
+  //bool result= levelBuf[end_node] == INT_MAX;// && checkNVV(nprocs);
+  printf("my_rank: %d, boolean: %d\n", my_rank, result);
+  while (levelBuf[end_node] == INT_MAX && checkNVV(nprocs)) {
+    MPI_Barrier(MPI_COMM_WORLD);
+    nVVBuf[my_rank] = 0;
+    bfs(my_rank, my_work, no_of_nodes, end_node, nVV, nprocs, currLevel);
+    currLevel ++;
+    printf("inside while, my_rank: %d\n", my_rank);
+    output_vec(levelBuf,no_of_nodes);
+  }
+  
+  
+  /*
+  int*  frontier = new int[no_of_nodes];
+  init_vec(frontier, no_of_nodes);
+  int * pfrontier = new int[no_of_nodes];
+    init_vec(pfrontier, no_of_nodes);
+  int * closed = new int[no_of_nodes];
+    init_vec(closed, no_of_nodes);
+  frontier[start_node] = 1;
+  int frontier_size = 1;
+  int * agg_frontier = new int[no_of_nodes*nprocs];
+  init_vec(agg_frontier, nprocs*no_of_nodes);
+  int *pfrontier_count = new int[nprocs];
+  init_vec(pfrontier_count, nprocs);
+  agg_frontier[start_node] = 1;
+  pfrontier_count[0] = 1;
+  printf("frontier\n");
+  output_vec(frontier, no_of_nodes);
+  printf("pfrontier\n");
+  output_vec(pfrontier, no_of_nodes);
+  printf("agg_frontier\n");
+  output_vec(agg_frontier, no_of_nodes*nprocs);
+  while (frontier_size > 0 && bfs_result == -1) {
+      
+    MPI_Scatter(agg_frontier, no_of_nodes, MPI_INT, pfrontier, no_of_nodes, MPI_INT, ROOT, MPI_COMM_WORLD);
+    printf("my_rank: %d, before bfs: pfrontier\n", my_rank);
+    output_vec(pfrontier, no_of_nodes);
+    
+    bfs(pfrontier, my_rank, no_of_nodes, pfrontier_count[my_rank]);
+    printf("my_rank: %d, after bfs: pfrontier\n", my_rank);
+    output_vec(pfrontier, no_of_nodes);
+
+    MPI_Gather(pfrontier, no_of_nodes, MPI_INT, agg_frontier,no_of_nodes, MPI_INT, ROOT, MPI_COMM_WORLD);
+    printf("my_rank: %d, after bfs: agg_frontier\n", my_rank);
+    output_vec(agg_frontier, no_of_nodes*nprocs);
+    if (my_rank == ROOT) {
+    // check end node
+    for (int i = 0 ; i < nprocs; i ++) {
+      if (agg_frontier[i*no_of_nodes+end_node] == 1)
+	bfs_result = 1;
+    }
+    if (bfs_result == 1)
+      continue;
+    // add prev frontier to closed
+
+    for (int i = 0; i < no_of_nodes; i++) {
+      if (frontier[i] == 1) {
+	closed[i] = 1;
+	frontier[i] = 0;
+      }
+    }
+    // add new frontier to frontier
+    frontier_size = 0;
+    for (int i = 0; i < no_of_nodes*nprocs; i++) {
+      if (agg_frontier[i] == 1) {
+	if (closed[i%no_of_nodes] == 1)
+	  agg_frontier[i] = 0;
+	else {
+	  frontier[i%no_of_nodes] =1;
+	  frontier_size ++;
+	  agg_frontier[i] = 0;
+	}
+      }
+      if (i / no_of_nodes == 0)
+	pfrontier_count[i/no_of_nodes] = 0;
+    }
+    // redistribute
+    int j = 0;
+    printf("frontier_size: %d \n", frontier_size);
+    for (int i = 0; i < no_of_nodes; i++) {
+      if (frontier[i] == 1) {
+	agg_frontier[j*nprocs/frontier_size*no_of_nodes+i] = 1;
+	j++;
+	pfrontier_count[j/nprocs] += 1;
+      }
+    }
+      printf("frontier\n");
+      output_vec(frontier, no_of_nodes);
+      printf("pfrontier_count\n");
+      output_vec(pfrontier_count, nprocs);
+      printf("aggfrontier\n");
+      output_vec(agg_frontier, no_of_nodes*nprocs);
+
+      printf("closed\n");
+      output_vec(closed, no_of_nodes);
+    }
+  }
+  */
+  MPI_Finalize();
+  if (my_rank == ROOT) {
+    if (levelBuf[end_node] != INT_MAX)
+      printf("bfs_result: path exists\n");
+    else
+      printf("bfs_result: path dne\n");
+  gettimeofday(&timecheck, NULL);  
+  bfs_end = (long) timecheck.tv_sec*1000 + (long)timecheck.tv_usec / 1000;
+  bfs_elapsed = bfs_end - bfs_start;
+
+
+  printf("***********************\n");
+  printf("nodes: %d nprocs: %d time: %ld msecs\n", no_of_nodes, nprocs, bfs_elapsed);
+  }
+  
+
+  return 0;
+
+}

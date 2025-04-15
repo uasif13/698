@@ -1,0 +1,212 @@
+#include <mpi.h>
+#include <cmath>
+#include <math.h>
+#include <climits>
+#include <vector>
+#include <array>
+#include <iostream>
+#include <sys/time.h>
+
+using namespace std;
+using std::cout;
+using std::cerr;
+using std::endl;
+
+#define MASTER 0
+#define ROOT 0
+
+#define NO_OF_NODES 10
+
+extern "C" {
+  void bfs(int * pfrontier, int my_rank, CSR * csr, int no_of_nodes, int pf_count)
+}
+void output_vec(int * data, int data_size) {
+  for (int i = 0; i < data_size; i++)
+   printf("%d ", data[i]);
+  printf("\n");
+}
+
+void init_level(int * level, int no_of_nodes) {
+
+  // assume start_node is 0
+  level[0] = 0;
+  for (int i = 1; i < no_of_nodes; i++) {
+    level[i] = INT_MAX;
+  }
+}
+void init_vec(int * data, int data_size) {
+  for (int i = 0; i < data_size; i ++)
+    data[i]=0;
+}
+
+void init_graph(int * graph, int no_of_nodes) {
+  array<int,100> graph_online = {0, 1, 0, 0, 0, 1, 0, 0, 1, 0,1, 0, 1, 0, 0, 0, 0, 1, 0, 0,0, 0, 0, 1, 1, 0, 0, 0, 0, 0,0, 0, 0, 0, 0, 0, 1, 0, 0, 1,1, 0, 0, 0, 0, 1, 0, 0, 1, 0,0, 0, 0, 0, 0, 0, 1, 0, 0, 0,0, 0, 0, 1, 0, 0, 0, 1, 0, 0,0, 0, 0, 0, 0, 0, 0, 0, 1, 1,0, 1, 0, 0, 0, 0, 0, 0, 0, 0,0, 0, 0, 0, 1, 0, 1, 0, 0, 0};
+
+  for (int i = 0 ; i < no_of_nodes*no_of_nodes; i++) {
+    graph[i] = graph_online[i];
+  }
+}
+
+class CSR {
+   public:
+      int* srcPtrs;
+      int srcPtrs_size;
+      int* dst;
+      int dst_size;
+      CSR(int * graph, int no_of_nodes){
+      	  vector<int> v_srcPtrs;
+	  vector<int> v_dst;
+	  v_srcPtrs.push_back(0);
+	  for (int i = 0; i < no_of_nodes*no_of_nodes; i ++) {
+//	      printf("index: %d graph: %d srcPtrs_size: %d dst_size %d\n", i, graph[i], v_srcPtrs.size(), v_dst.size());
+      	      int row = i / no_of_nodes;
+	      int col = i % no_of_nodes;
+	      if (graph[i] != 0){
+		 // new row
+		 if (row == v_srcPtrs.size()) {
+		    v_srcPtrs.push_back(v_dst.size());
+		 }
+		 v_dst.push_back(col);
+	      }
+	      if (col == no_of_nodes - 1 && row == v_srcPtrs.size())
+	      	 v_srcPtrs.push_back(v_dst.size());
+	  }
+	  v_srcPtrs.push_back(v_dst.size());
+	  srcPtrs_size = v_srcPtrs.size();
+	  srcPtrs = new int[srcPtrs_size];
+	  dst_size = v_dst.size();
+	  dst = new int[dst_size];
+	  for (int i = 0; i < srcPtrs_size; i++){
+	      srcPtrs[i] = v_srcPtrs[i];
+	  }
+	  for (int i = 0; i < dst_size; i ++){
+	      dst[i] = v_dst[i];
+	  }
+      }
+      CSR (int* n_srcPtrs, int* n_dst){
+      	  srcPtrs = n_srcPtrs;
+	  dst = n_dst;
+      }
+};
+
+
+int main(int argc, char * argv[]) {
+  int my_work, my_rank, nprocs;
+  int no_of_nodes = 10;
+  int * graph;
+  int graph_size;
+  int start_node, end_node;
+
+  int * level;
+  int currLevel;
+  CSR * csr;
+  MPI_Comm world = MPI_COMM_WORLD;
+  
+  MPI_Init(&argc, &argv);
+
+  MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
+  MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
+
+  if (argc == 2) {
+    no_of_nodes = atoi(argv[1]);
+  }
+  graph = new int[no_of_nodes*no_of_nodes];
+  level = new int [no_of_nodes];
+  graph_size = no_of_nodes*no_of_nodes;
+  if (my_rank == ROOT) {
+    init_graph(graph, no_of_nodes);
+    init_level(level, no_of_nodes);
+  }
+  start_node = 0;
+  end_node = no_of_nodes - 1;
+  printf("my_rank: %d nprocs: %d no_of_nodes: %d\n", my_rank, nprocs, no_of_nodes);
+
+  MPI_Bcast(graph, graph_size, MPI_INT, ROOT, MPI_COMM_WORLD);
+  printf("graph\n");
+  output_vec(graph,graph_size);
+  csr = new CSR(graph, no_of_nodes);
+  int*  frontier = new int[no_of_nodes];
+  init_vec(frontier, no_of_nodes);
+  int * pfrontier = new int[no_of_nodes];
+    init_vec(pfrontier, no_of_nodes);
+  int * closed = new int[no_of_nodes];
+    init_vec(closed, no_of_nodes);
+  frontier[start_node] = 1;
+  int frontier_size = 1;
+  int * agg_frontier = new int[no_of_nodes*nprocs];
+  init_vec(agg_frontier, nprocs*no_of_nodes);
+  int *pfrontier_count = new int[nprocs];
+  init_vec(pfrontier_count, nprocs);
+  agg_frontier[start_node] = 1;
+  pfrontier_count[0] = 1;
+  printf("frontier\n");
+  output_vec(frontier, no_of_nodes);
+  printf("pfrontier\n");
+  output_vec(pfrontier, no_of_nodes);
+  printf("agg_frontier\n");
+  output_vec(agg_frontier, no_of_nodes*nprocs);
+  while (frontier_size > 0) {
+      
+    MPI_Scatter(agg_frontier, no_of_nodes, MPI_INT, pfrontier, no_of_nodes, MPI_INT, ROOT, MPI_COMM_WORLD);
+    printf("my_rank: %d, before bfs: pfrontier\n", my_rank);
+    output_vec(pfrontier, no_of_nodes);
+    
+    bfs(pfrontier, my_rank, csr, no_of_nodes, pfrontier_count[my_rank]);
+    printf("my_rank: %d, after bfs: pfrontier\n", my_rank);
+    output_vec(pfrontier, no_of_nodes);
+
+    MPI_Gather(pfrontier, no_of_nodes, MPI_INT, agg_frontier,no_of_nodes, MPI_INT, ROOT, MPI_COMM_WORLD);
+    printf("my_rank: %d, after bfs: agg_frontier\n", my_rank);
+    output_vec(agg_frontier, no_of_nodes*nprocs);
+    if (my_rank == ROOT) {
+    // check end node
+    for (int i = 0 ; i < nprocs; i ++) {
+      if (agg_frontier[i*no_of_nodes+end_node] == 1)
+	return 1;
+    }
+    // add prev frontier to closed
+
+    for (int i = 0; i < no_of_nodes; i++) {
+      if (frontier[i] == 1) {
+	closed[i] = 1;
+	frontier[i] = 0;
+      }
+    }
+    // add new frontier to frontier
+    frontier_size = 0;
+    for (int i = 0; i < no_of_nodes*nprocs; i++) {
+      if (agg_frontier[i] == 1) {
+	if (closed[i%no_of_nodes] == 1)
+	  agg_frontier[i] = 0;
+	else {
+	  frontier[i%no_of_nodes] =1;
+	  frontier_size ++;
+	  agg_frontier[i] = 0;
+	}
+      }
+      if (i / no_of_nodes == 0)
+	pfrontier_count[i/no_of_nodes] = 0;
+    }
+    // redistribute
+    int j = 0;
+    printf("frontier_size: %d \n", frontier_size);
+    for (int i = 0; i < no_of_nodes; i++) {
+      if (frontier[i] == 1) {
+	agg_frontier[j*nprocs/frontier_size*no_of_nodes+i] = 1;
+	j++;
+	pfrontier_count[j/nprocs] += 1;
+      }
+    }
+      printf("frontier\n");
+      output_vec(frontier, no_of_nodes);
+      printf("pfrontier_count\n");
+      output_vec(pfrontier_count, nprocs);
+      printf("aggfrontier\n");
+      output_vec(agg_frontier, no_of_nodes*nprocs);
+
+      printf("closed\n");
+      output_vec(closed, no_of_nodes);
+    }
+  }  
+  return -1;
+}

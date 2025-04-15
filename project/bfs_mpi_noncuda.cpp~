@@ -1,0 +1,34 @@
+#include <mpi.h>
+#include <cmath>
+#include <math.h>
+#include <climits>
+#include <vector>
+#include <array>
+#include <iostream>
+#include <sys/time.h>
+
+using namespace std;
+using std::cout;
+using std::cerr;
+using std::endl;
+
+#define MASTER 0
+#define ROOT 0
+
+#define NO_OF_NODES 10
+extern "C" {
+  int bfs(int * pfrontier, int my_rank, int * graph, int no_of_nodes, int pf_count);
+}
+int bfs (int * pfrontier, int my_rank, int * graph, int no_of_nodes, int pf_count) {
+  int * nfrontier = new int[no_of_nodes];
+  for (int i = 0; i < no_of_nodes; i++) {
+    if (pfrontier[i] == 1) {
+      for (int j = 0; j < no_of_nodes; j ++ ) {
+	if (graph[i*no_of_nodes + j] == 1) {
+	  nfrontier[j] = 1;
+	}
+      }
+    }
+  }
+  pfrontier = nfrontier;
+}
