@@ -109,3 +109,33 @@ mpi ata: 0 2 1 2 2 2 2 x 1 x
 rank 1:
 mpi ata: 0 x x x x x x x 1 x
 check 8: 0 2 2 x x 2 2 x 1 x
+
+my_rank: 0 arr: 0 2 5 8 8 9 10 15 16 17 23 
+my_rank: 0 arr: 1 8 0 2 8 2 3 6 8 9 0 2 4 7 9 8 2 2 3 5 6 7 8 
+
+rank: 0
+check 0: 0 1 x x x x x x 1 x
+rank: 1
+
+  0  0  0  0  1  0  0  0  0  0
+  0  1  0  0  1  0  0  0  0  0
+  0  1  0  0  0  0  0  1  0  0
+  0  1  1  1  0  0  0  0  0  0
+  0  1  0  1  0  0  0  0  0  0
+  0  0  0  1  0  0  0  0  0  1
+  1  1  0  0  1  0  0  0  0  0
+  0  0  0  1  0  0  0  0  1  0
+  0  0  0  0  0  0  0  0  0  0
+  0  0  0  0  0  0  0  0  0  0
+
+open - priority queue
+closed - linked hash table
+f values - buckets
+
+premade graphs - astar 
+igraph, networkx, - planar graphs - one connected graph - no disconnected components
+planar graphs
+undirected graphs
+uint64_t
+reconstruct path
+add diagonals and 3d
