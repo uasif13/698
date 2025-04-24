@@ -10,3 +10,102 @@ weighted edges - weighted vertex
 
 graph generators
 
+my_rank: 0 arr: 0 3 9 10 11 13 14 17 19 21 23 
+my_rank: 0 arr: 0 4 8 0 3 4 5 6 8 2 3 1 4 6 3 5 7 0 5 1 3 0 3 
+
+rank 0
+check 0: 0 x x x 1 x x x 1 x
+check 4: 0 2 x x 1 x x x 1 x
+mpi ata: 0 2 x 2 1 x x x 1 x
+check 1: 0 2 x 2 1 3 3 x 1 x
+check 3: 0 2 x 2 1 3 3 x 1 x
+mpi ata: 0 2 x 2 1 3 3 x 1 x
+rank 1
+mpi ata: 0 x x x 1 x x x 1 x
+check 8: 0 2 x 2 1 x x x 1 x
+mpi ata: 0 2 x 2 1 x x x 1 x
+mpi ata: 0 2 x 2 1 3 3 x 1 x
+check 5: 0 2 x 2 1 3 3 x 1 x
+check 6: 0 2 x 2 1 3 3 4 1 x
+
+my_rank: 1 arr: 0 2 3 5 5 5 5 7 10 13 16 
+my_rank: 1 arr: 7 8 1 5 6 3 5 0 6 9 3 4 6 3 6 9 
+
+rank 0
+check 0: 0 x x x x x x 1 1 x
+mpi ata: 0 x x 2 2 x x 1 1 x
+rank 1
+mpi ata: 0 x x x x x x 1 1 x
+check 7: 0 x x x x x 2 1 1 2
+check 8: 0 x x 2 2 x 2 1 1 2
+
+my_rank: 1 arr: 0 4 4 7 8 12 14 17 19 20 20 
+my_rank: 1 arr: 3 5 7 8 1 5 7 5 1 4 6 7 3 6 2 3 6 1 2 4 
+
+rank 0:
+check 0: 0 x x 1 x 1 x 1 1 x
+mpi ata: 0 2 2 1 2 1 x 1 1 x
+check 1: 0 2 2 1 2 1 x 1 1 x
+check 2: 0 2 2 1 2 1 x 1 1 x
+check 4
+rank 1:
+mpi ata: 0 x x x x 1 x 1 1 x
+check 5: 0 x x 2 x 1 2 1 1 x
+check 7: 0 2 2 2 x 1 2 1 1 x
+check 8: 0 2 2 2 2 1 2 1 1 x
+check 6: 0 2 2 2 2 1 2 1 1 x
+
+my_rank: 1 nprocs: 2 no_of_nodes: 10
+graph
+my_rank: 1 arr: 0 3 4 6 9 11 14 15 19 21 24 
+my_rank: 1 arr: 1 3 4 5 4 9 2 4 9 1 9 2 5 6 6 0 4 7 8 0 3 1 4 9 
+start_node: 0, end_node: 9 nvv: 1
+inside while, my_rank: 1
+rank: 1 my_work: 5 check frontier
+my_rank: 1
+my_rank: 1
+my_rank: 1
+my_rank: 1
+my_rank: 1
+my_rank: 1 arr: 0 2147483647 2147483647 2147483647 2147483647 2147483647 2147483647 2147483647 2147483647 2147483647 
+my_rank: 1, condition: 0
+my_rank: 1 compare
+my_rank: 1 after mpi alltoall
+my_rank: 1 arr: 2147483647 2147483647 2147483647 2147483647 2147483647 2147483647 2147483647 2147483647 2147483647 2147483647 
+my_rank: 1 after mpi aggregate
+my_rank: 1 arr: 0 2147483647 2147483647 2147483647 2147483647 2147483647 2147483647 2147483647 2147483647 2147483647 
+my_rank: 1 nVV flag: 0
+my_rank: 0 nprocs: 2 no_of_nodes: 10
+graph
+my_rank: 0 arr: 0 3 4 6 9 11 14 15 19 21 24 
+my_rank: 0 arr: 1 3 4 5 4 9 2 4 9 1 9 2 5 6 6 0 4 7 8 0 3 1 4 9 
+
+my_rank: 1 arr: 0 2 4 6 8 11 15 15 18 21 22 
+my_rank: 1 arr: 2 5 2 9 1 6 1 5 1 3 4 4 5 7 8 0 3 9 1 2 3 2 
+
+rank 0
+check 0: 0 x 1 x x 1 x x x x
+check 2: 0 2 1 x x 1 2 x x x
+mpi ata: 0 2 1 x 2 1 2 x x x
+rank 1
+mpi ata: 0 x x x x 1 x x x x
+check 5: 0 x x x 2 1 x 2 2 x
+mpi ata: 0 x x x 2 1 2 2 2 x
+check 6: 0 x x x 2 1 2 2 2 x
+check 7: 0 x x 3 2 1 2 2 2 3
+check 8: 0 
+
+my_rank: 1 arr: 0 2 7 14 15 18 20 22 22 24 27 
+my_rank: 1 arr: 2 8 1 5 6 7 8 0 1 3 4 5 6 8 6 4 5 8 0 1 0 1 1 2 1 3 8 
+
+
+
+
+rank 0:
+check 0: 0 x 1 x x x x x 1 x
+mpi ata: 0 x 1 x x x x x 1 x
+check 2: 0 2 1 2 2 2 2 x 1 x
+mpi ata: 0 2 1 2 2 2 2 x 1 x
+rank 1:
+mpi ata: 0 x x x x x x x 1 x
+check 8: 0 2 2 x x 2 2 x 1 x

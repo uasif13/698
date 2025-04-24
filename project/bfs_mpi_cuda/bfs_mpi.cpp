@@ -1,6 +1,6 @@
 /*
-  bfs mpi no cuda
-  compile: mpicxx -o bfs bfs_mpi_no_cuda.cpp
+  bfs mpi 
+  compile: make
   run: mpirun -n <nprocs> bfs <no_of_nodes> <start_node> <end_node> <percent>
  */
 
@@ -13,6 +13,8 @@
 #include <iostream>
 #include <sys/time.h>
 #include <random>
+
+#include "common_functions.h"
 
 using namespace std;
 using std::cout;
@@ -29,6 +31,8 @@ using std::endl;
  */
 #define MAX_BUF_SIZE 1<<25
 int levelBuf[MAX_BUF_SIZE], nVVBuf[MAX_BUF_SIZE], checkBuf[MAX_BUF_SIZE];
+
+
 
 void output_vec(int * data, int data_size, int my_rank) {
   printf("my_rank: %d arr: ", my_rank);
@@ -118,11 +122,11 @@ bool checkNVV(int nprocs) {
     
 }
   
-void aggregate(int * buffer_level_recv, int my_rank,  int my_work, int nprocs) {
+void aggregate(int * buffer_level_recv, int my_rank,  int my_work, int nprocs, int * level) {
   for (int i = 0; i < my_work; i++) {
     for (int j = 0; j < nprocs; j++ ) {
-      if (buffer_level_recv[i+j*my_work] < levelBuf[i+my_rank*my_work]) {
-	levelBuf[i+my_rank*my_work] = buffer_level_recv[i+j*my_work];
+      if (buffer_level_recv[i+j*my_work] < level[i+my_rank*my_work]) {
+	level[i+my_rank*my_work] = buffer_level_recv[i+j*my_work];
 
 	nVVBuf[my_rank] = 1;
 	//	printf("my_rank: %d levelBuf: %d bufflevelrecv: %d nVV: %d\n", my_rank, i+my_rank*my_work, j*my_work, nVVBuf[my_rank]);
@@ -131,23 +135,23 @@ void aggregate(int * buffer_level_recv, int my_rank,  int my_work, int nprocs) {
   }
 }
 
-void bfs(int * srcPtrs, int * dst, int my_rank, int my_work, int currLevel) {
+void bfs(int * srcPtrs, int * dst, int * level, int * nVV, int my_rank, int my_work, int currLevel) {
 
   // printf("rank: %d my_work: %d check frontier\n",my_rank, my_work);
 
     for (int i = 0; i < my_work; i ++) {
       // printf("my_rank: %d\n", my_rank);
-      if (levelBuf[i+my_rank*my_work] == currLevel -1) {
+      if (level[i+my_rank*my_work] == currLevel -1) {
 	int start = srcPtrs[my_rank*my_work+i];
 	int end = srcPtrs[my_rank*my_work+i+1];
 	// printf("my_rank: %d start: %d end: %d\n",my_rank, start, end);
 	for (int j = start; j < end; j++ ) {
 	  int neighbor = dst[j];
 	  // printf("my_rank: %d neighbor: %d, level: %d\n",my_rank, neighbor, levelBuf[neighbor]);
-	  if (levelBuf[neighbor] == INT_MAX) {
+	  if (level[neighbor] == INT_MAX) {
 	    // printf("my_rank: %d neighbor: %d, level: %d\n",my_rank, neighbor, levelBuf[neighbor]);
-	    levelBuf[neighbor] = currLevel;
-	    nVVBuf[my_rank] = 1;
+	    level[neighbor] = currLevel;
+	    nVV[my_rank] = 1;
 	    
 	    // printf("my_rank: %d, neighbor: %d, level: %d, nVV: %d\n",my_rank, neighbor, levelBuf[neighbor], nVVBuf[my_rank]);
 	  }
@@ -168,19 +172,22 @@ int main(int argc, char * argv[]) {
   float percent;
   int * srcPtrs;
   int * dst;
-  int srcPtrs_size = 0;
-  int dst_size = 0;
+  int *srcPtrs_size_arr =  new int[1];
+  int *dst_size_arr = new int[1];
+  int srcPtrs_size;
+  int dst_size;
 
   long bfs_start, bfs_end, bfs_elapsed;
 
   struct timeval timecheck;
   
-  int nVV;
+  int * nVV;
+  int * level;
 
   int bfs_result = -1;
   
   MPI_Comm world = MPI_COMM_WORLD;
-  
+  //printf("before mpi_init\n");
   MPI_Init(&argc, &argv);
 
   MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
@@ -201,30 +208,44 @@ int main(int argc, char * argv[]) {
   if (start_node >= no_of_nodes || end_node >= no_of_nodes || start_node < 0 || end_node < 0) {
     printf("Error: start_node %d or end_node %d has to be valid node[0-%d]\n", start_node, end_node, no_of_nodes-1);
   }
+  //printf("my_rank: %d, argument initialized\n", my_rank);
+  level = new int[no_of_nodes];
+  nVV = new int[nprocs];
   // create level
   for (int i = 0; i < no_of_nodes; i++)
-    levelBuf[i] = INT_MAX;
-  levelBuf[start_node] = 0;
-
+    level[i] = INT_MAX;
+  level[start_node] = 0;
+  for (int i = 0; i < nprocs; i++)
+    nVV[i] = 1;
   printf("my_rank: %d start_node: %d, end_node: %d\n", my_rank, start_node, end_node);
   if (my_rank == ROOT) {
     // Create graph
     csr = new CSR(no_of_nodes, percent);
-    srcPtrs = csr -> srcPtrs;
-    dst = csr -> dst;
     srcPtrs_size = csr -> srcPtrs_size;
     dst_size = csr -> dst_size;
-    //output_vec(srcPtrsBuf,srcPtrs_sizebuf[0], my_rank);
-     // output_vec(dstBuf,dst_sizebuf[0], my_rank);
+    srcPtrs_size_arr[0] = srcPtrs_size;
+    dst_size_arr[0] = dst_size;
+    srcPtrs = new int[srcPtrs_size];
+    dst = new int[dst_size];
+    srcPtrs = csr -> srcPtrs;
+    dst = csr -> dst;
+    
+    // output_vec(srcPtrs,srcPtrs_size, my_rank);
+    //output_vec(dst,dst_size, my_rank);
       // broadcast graph
+
     printf("my_rank: %d nprocs: %d no_of_nodes: %d edge: %d\n", my_rank, nprocs, no_of_nodes, dst_size);
     
   }
   // broadcast graph
-  MPI_Bcast(&srcPtrs_size, 1, MPI_INT, ROOT, MPI_COMM_WORLD);
+  //printf("my_rank: %d before broadcast graph\n", my_rank);
+  MPI_Bcast(srcPtrs_size_arr, 1, MPI_INT, ROOT, MPI_COMM_WORLD);
   MPI_Barrier(MPI_COMM_WORLD);
-  MPI_Bcast(&dst_size, 1, MPI_INT, ROOT, MPI_COMM_WORLD);
+  MPI_Bcast(dst_size_arr, 1, MPI_INT, ROOT, MPI_COMM_WORLD);
   MPI_Barrier(MPI_COMM_WORLD);
+  printf("my_rank: %d srcPtrs_size: %d dst_size: %d\n", my_rank, srcPtrs_size, dst_size);
+  srcPtrs_size = srcPtrs_size_arr[0];
+  dst_size = dst_size_arr[0];
   if (my_rank != ROOT) {
     srcPtrs = new int[srcPtrs_size];
     dst = new int[dst_size];
@@ -242,9 +263,6 @@ int main(int argc, char * argv[]) {
 
 
 
-  nVVBuf[my_rank] = 1;
-  
-  
   printf("my_rank: %d after bcast graph nprocs: %d no_of_nodes: %d edge: %d\n", my_rank, nprocs, no_of_nodes, dst_size);
   
   
@@ -258,45 +276,46 @@ int main(int argc, char * argv[]) {
   int compare = 1;
 
   int * buffer_level_recv = new int[my_work*nprocs];
-  MPI_Allgather(&nVVBuf[my_rank], 1, MPI_INT, checkBuf, 1, MPI_INT, MPI_COMM_WORLD);
+  MPI_Allgather(&nVV[my_rank], 1, MPI_INT, checkBuf, 1, MPI_INT, MPI_COMM_WORLD);
+  //output_vec(nVV, nprocs, my_rank);
   while (checkNVV(nprocs)) {
     // reset flags
  
-    nVVBuf[my_rank] = 0;
+    nVV[my_rank] = 0;
 
-    // printf("inside while, my_rank: %d\n", my_rank);
+    //printf("inside while, my_rank: %d\n", my_rank);
 
-    bfs(srcPtrs, dst, my_rank, my_work,  currLevel);
+    bfs_cuda(srcPtrs, dst, level, nVV, my_rank, my_work,  currLevel, srcPtrs_size, dst_size, no_of_nodes, nprocs);
     currLevel ++;
     
     // output_vec(levelBuf,no_of_nodes, my_rank);
-    // printf("my_rank: %d, condition: %d\n", my_rank, nVVBuf[my_rank]);
+    //printf("my_rank: %d, condition: %d\n", my_rank, nVVBuf[my_rank]);
     // compare -- all processes are in loop
     // output_vec(checkBuf, nprocs, my_rank);
 
-    // MPI_Allgather(&nVVBuf[my_rank], 1, MPI_INT, checkBuf, 1, MPI_INT, MPI_COMM_WORLD);
+    MPI_Allgather(&nVV[my_rank], 1, MPI_INT, checkBuf, 1, MPI_INT, MPI_COMM_WORLD);
     // output_vec(checkBuf, nprocs, my_rank);
     if (currLevel%compare == 0) {
       //printf("my_rank: %d compare\n", my_rank);
 
-      MPI_Alltoall(levelBuf, my_work, MPI_INT, buffer_level_recv, my_work, MPI_INT, world);
+      MPI_Alltoall(level, my_work, MPI_INT, buffer_level_recv, my_work, MPI_INT, world);
       //printf("my_rank: %d after mpi alltoall\n", my_rank);
       //output_vec(buffer_level_recv, my_work*nprocs, my_rank);
 
-      aggregate(buffer_level_recv, my_rank, my_work,nprocs);
+      aggregate(buffer_level_recv, my_rank, my_work,nprocs, level);
       //printf("my_rank: %d after mpi aggregate\n", my_rank);      
-      // output_vec(levelBuf, no_of_nodes, my_rank);
+      // output_vec(level, no_of_nodes, my_rank);
       //printf("my_rank: %d nVV flag: %d\n", my_rank, checkNVV(nprocs));
 
-      MPI_Allgather(&nVVBuf[my_rank], 1, MPI_INT, checkBuf, 1, MPI_INT, MPI_COMM_WORLD);
+      MPI_Allgather(&nVV[my_rank], 1, MPI_INT, checkBuf, 1, MPI_INT, MPI_COMM_WORLD);
       //printf("my_rank: %d after all gather nVV flag: %d\n", my_rank, checkNVV(nprocs));
       }
   }
 
   
 
-  if (my_rank == nprocs -1) {
-    if (levelBuf[end_node] != INT_MAX)
+  if (my_rank == end_node/nprocs) {
+    if (level[end_node] != INT_MAX)
       printf("bfs_result: path exists\n");
     else
       printf("bfs_result: path dne\n");
