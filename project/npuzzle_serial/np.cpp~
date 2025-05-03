@@ -1,0 +1,243 @@
+#include <cmath>
+#include <math.h>
+
+#include <iostream>
+#include <sys/time.h>
+#include <random>
+#include <climits>
+
+#include <iterator>
+#include <algorithm>
+
+#include <set>
+
+using namespace std;
+using std::cout;
+using std::cerr;
+using std::endl;
+
+#define MAX_BUFFER_SIZE 1 << 25
+
+int open[MAX_BUFFER_SIZE], closed[MAX_BUFFER_SIZE];
+
+void output_vec(int * data, int data_size) {
+  for (int i = 0; i < data_size; i++) {
+    printf("%d ", data[i]);
+  }
+  printf("\n");
+}
+// distance from proper location- manhattan
+//count of misplaced tiles
+int heuristic(int * data, int n) {
+  int total = n*n;
+  int dist = 0;
+  for (int i = 2; i < total+2; i++) {
+    if (data[i] != i-2) {
+      dist ++; 
+    }
+  }
+  data[1] = dist;
+  return dist;
+}
+void random_start(int * initial, int n) {
+  int total = n*n;
+  for (int i = 2; i < total+2; i ++) {
+    initial[i] = i-2;
+  }
+  std::random_device rd;
+  std::mt19937 g(rd());
+  shuffle(initial+2, initial+total+2, default_random_engine(0));
+  heuristic(initial, n);
+}
+
+
+int copy_to_open(int * data, int n, int index) {
+  int total = n*n+2;
+  for (int i = index; i < total; i++) {
+    open[index+i] = data[i];
+  }
+  index += total;
+  return index;
+}
+int copy_to_closed(int * data, int n, int index) {
+  int total = n*n+2;
+  for (int i = index; i < total; i++) {
+    closed[index+i] = data[i];
+  }
+  index += total;
+  return index;
+}
+
+int find_zero(int * data, int n) {
+  int total = n*n+2;
+  for (int i = 2; i < total; i++) {
+    if (data[i] == 0)
+      return i;
+  }
+  return -1;
+}
+int add_neighbors(int * nb, int nb_size, int zero_index, int n) {
+  int zero_index_r = (zero_index-2)/n;
+  int zero_index_c = (zero_index-2)%n;
+    printf("zero_index_r: %d zero_index_c: %d\n", zero_index_r, zero_index_c);
+    // corners
+    if (zero_index == 0 || zero_index == n-1 || zero_index == n*n-1 || zero_index == n*(n-1)) {
+
+      nb_size = 2;
+      if (zero_index == 0) {
+	nb[0] = 1;
+	nb[1] = n;
+      }
+      else if (zero_index == n-1) {
+	nb[0] = -1;
+	nb[1] = n;
+      }
+      else if (zero_index == n*n-1) {
+	nb[0] = -n;
+	nb[1] = -1;
+      }
+      else if (zero_index_c == n*(n-1)) {
+	nb[0] = -n;
+	nb[1] = 1;
+      }
+    }
+    // edges
+    else if (zero_index_r == 0 || zero_index_r == n-1 || zero_index_c == 0 || zero_index_c == n-1) {
+
+      nb_size = 3;
+      if (zero_index_r == 0) {
+	nb[0] = -1;
+	nb[1] = 1;
+	nb[2] = n;
+      }
+      else if (zero_index_r == n-1) {
+	nb[0] = -1;
+	nb[1] = 1;
+	nb[2] = -n;
+      }
+      else if (zero_index_c == 0) {
+	nb[0] = -n;
+	nb[1] = n;
+	nb[2] = 1;
+      }
+      else if (zero_index_c == n-1) {
+	nb[0] = -n;
+	nb[1] = n;
+	nb[2] = -1;
+      }
+    }
+    // center
+    else {
+
+      nb_size = 4;
+      nb[0] = 1;
+      nb[1] = -1;
+      nb[2] = -n;
+      nb[3] = n;
+    }
+    return nb_size;
+}
+int npuzzle(int n) {
+  int total = n*n+2;
+    // state is stored as g,h,n^2 numbers;
+  int * initial = new int[total];
+  int * current = new int [total];
+  int * neighbor = new int[total];
+  random_start(initial,n);
+  output_vec(initial, total);
+  int open_index = 0;
+  int closed_index = 0;
+  int open_size = 1;
+  int closed_size = 0;
+  int * nb = new int[4];
+  int nb_size;
+  int zero_index;
+  bool inside_closed;
+  bool inside_open;
+  open_index = copy_to_open(initial, n, open_index);
+  int iteration = 0;
+  while (open_size > 0 && iteration < 3) {
+    // get lowest f array
+    int lowest_f_score = INT_MAX;
+    int lowest_f_index;
+    for (int i = 0; i < open_size*total; i += total) {
+      if (open[i] + open[i+1] < lowest_f_score) {
+	lowest_f_score = open[i]+open[i+1];
+	lowest_f_index = i;
+      }
+    }
+    printf("lowest_f_score: %d lowest_f_index: %d\n", lowest_f_score, lowest_f_index);
+    for (int i = 0; i < total; i ++) {
+      current[i] = open[lowest_f_index+i];
+    }
+   
+    // all tiles in correct place
+    if (current[1] == 0) {
+      return 1;
+    }
+    closed_index = copy_to_closed(current, n, closed_index);
+    output_vec(current,total);
+    zero_index = find_zero(current, n);
+    printf("zero_index: %d\n", zero_index);
+    nb_size = add_neighbors(nb, nb_size, zero_index, n);
+    printf("nb_size: %d\n",nb_size);
+    output_vec(nb,4);
+    for (int nb_index = 0; nb_index < nb_size; nb_index++) {
+      int nb_val = nb[nb_index];
+      int swap_elem = nb_val+zero_index;
+      printf("nb_val: %d swap_index: %d\n",nb_val, swap_elem);
+      // create neighbor
+      for (int i = 0; i < total; i++) {
+	if (i == swap_elem) {
+	  neighbor[i] = 0;
+	}else if (i == zero_index) {
+	  neighbor[i] = current[swap_elem];
+	} else {
+	  neighbor[i] = current[i];
+	}
+      }
+      // check closed list
+      for (int i = 0; i < total*closed_size; i+=total) {
+	inside_closed = true;
+	for (int j = 2; j < total ; j++) {
+	  if (neighbor[i] != closed[i+j])
+	    inside_closed =false;
+	}
+	if (inside_closed)
+	  continue;
+      }
+      if (inside_closed)
+	continue;
+      int g_score = current[0] + 1;
+      // check open list
+      for (int i = 0; i < total*open_size; i+= total) {
+	inside_open = true;
+	for (int j = 2; j < total; j++) {
+	  if (neighbor[i] != open[i+j])
+	    insid
+	}
+
+      }
+      
+
+
+
+    }
+    iteration ++;
+  }
+  return -1;
+}
+
+int main(int argc, char* argv[]) {
+  int n = 3;
+  if (argc == 2)
+    n = atoi(argv[1]);
+  if (n < 3 || n > 5)
+    printf("Error: n must be 3,4, or 5");
+  int result = npuzzle(n);
+    if (result == 1)
+      printf("path exists\n");
+    else
+      printf("path dne\n");
+  return 1;
+}
