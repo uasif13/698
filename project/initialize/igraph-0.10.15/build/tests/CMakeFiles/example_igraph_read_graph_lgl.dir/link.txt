@@ -1,0 +1,1 @@
+/usr/bin/c++ -O3 -DNDEBUG CMakeFiles/example_igraph_read_graph_lgl.dir/__/examples/simple/igraph_read_graph_lgl.c.o -o example_igraph_read_graph_lgl  ../src/libigraph.a -lm /usr/lib/gcc/x86_64-redhat-linux/12/libgomp.so /usr/lib64/libpthread.a 

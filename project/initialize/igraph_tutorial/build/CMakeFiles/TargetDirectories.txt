@@ -1,0 +1,5 @@
+/home/asifuddin/698/project/initialize/igraph_tutorial/build/CMakeFiles/igraph_test.dir
+/home/asifuddin/698/project/initialize/igraph_tutorial/build/CMakeFiles/igraph_create.dir
+/home/asifuddin/698/project/initialize/igraph_tutorial/build/CMakeFiles/igraph_properties.dir
+/home/asifuddin/698/project/initialize/igraph_tutorial/build/CMakeFiles/edit_cache.dir
+/home/asifuddin/698/project/initialize/igraph_tutorial/build/CMakeFiles/rebuild_cache.dir

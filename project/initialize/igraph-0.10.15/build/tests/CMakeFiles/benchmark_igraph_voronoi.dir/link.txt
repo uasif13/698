@@ -1,0 +1,1 @@
+/usr/bin/c++ -O3 -DNDEBUG CMakeFiles/benchmark_igraph_voronoi.dir/benchmarks/igraph_voronoi.c.o -o benchmark_igraph_voronoi  ../src/libigraph.a -lm /usr/lib/gcc/x86_64-redhat-linux/12/libgomp.so /usr/lib64/libpthread.a 

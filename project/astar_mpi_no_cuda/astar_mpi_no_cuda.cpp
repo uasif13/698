@@ -89,7 +89,7 @@ void aggregate(uint64_t * buffer_recv, uint64_t* buffer, int my_rank,  int my_wo
   }
 }
 // for parent
-void aggregate_parent(uint64_t * buffer_recv, uint64_t* buffer, int my_rank,  int my_work, int nprocs) {
+void aggregate_parent(uint64_t * buffer_recv, uint64_t* buffer, uint64_t *gList, int my_rank,  int my_work, int nprocs) {
   uint64_t buffer_recv_index;
   uint64_t buffer_index;
   for (uint64_t i = 0; i < my_work; i++) {
@@ -108,7 +108,7 @@ void aggregate_parent(uint64_t * buffer_recv, uint64_t* buffer, int my_rank,  in
 
 void astar(uint64_t * openList, uint64_t * closedList, uint64_t * src, uint64_t * dst, uint64_t *gList, uint64_t *hList, uint64_t *parent, uint64_t* nVVBuf, uint64_t nVV, int my_rank, uint64_t my_work) {
   uint64_t g_score;
-  printf("my_rank: %d inside astar\n", my_rank);
+  //printf("my_rank: %d inside astar\n", my_rank);
   /* if (my_rank == 1) {
     	output_graph(gList, 6, my_rank);
 	output_graph(openList, 6, my_rank);
@@ -120,7 +120,7 @@ void astar(uint64_t * openList, uint64_t * closedList, uint64_t * src, uint64_t 
     uint64_t index = my_rank*my_work+i;
 
     if (openList[index] == 1 && closedList[index] == 0) {
-      printf("my_rank: %d index: %*" PRIu64 "\n", my_rank, 10, index);
+      // printf("my_rank: %d index: %*" PRIu64 "\n", my_rank, 10, index);
       nVVBuf[my_rank] = 1;
       nVV = 1;
       openList[index] = 0;
@@ -132,14 +132,14 @@ void astar(uint64_t * openList, uint64_t * closedList, uint64_t * src, uint64_t 
 	if (closedList[nb] == 1)
 	  continue;
 	g_score = gList[index]+1;
-	//	printf("my_rank: %d nb: %*" PRIu64 "\n", my_rank, 10, nb);
+	//printf("my_rank: %d nb: %*" PRIu64 "\n", my_rank, 10, nb);
 	if (openList[nb] == 0)
 	  openList[nb] = 1;
 	else if (gList[nb] != 0 && g_score >= gList[nb])
 	  continue;
 	gList[nb] = g_score;
 	parent[nb] = index;
-	printf("my_rank: %d nb: %*" PRIu64 " gList: %*" PRIu64 " g_score: %*" PRIu64 "\n",my_rank, 10, nb, 10, gList[index], 10, g_score);
+	//printf("my_rank: %d nb: %*" PRIu64 " parent: %*" PRIu64 " g_score: %*" PRIu64 "\n",my_rank, 10, nb, 10, index, 10, g_score);
 
       }
     }
@@ -186,7 +186,7 @@ int main(int argc, char * argv[]) {
     end = atoi(argv[i++]);
     heuristic = argv[i++];
   } else {
-    grid_size = 4;
+    grid_size = 10;
     start = 0;
     end = grid_size*grid_size -1;
     heuristic = "manhattan";
@@ -263,7 +263,7 @@ int main(int argc, char * argv[]) {
       uint64_t dst_index = 0;
       uint64_t src_index = 0;
 
-      igraph_adjlist_init(&igraph, &al, IGRAPH_ALL, IGRAPH_NO_LOOPS, IGRAPH_NO_MULTIPLE);
+     igraph_adjlist_init(&igraph, &al, IGRAPH_ALL, IGRAPH_NO_LOOPS, IGRAPH_NO_MULTIPLE);
 
       for (igraph_integer_t i = 0; i < total_src - 1; i++) {
 	igraph_vector_int_t *v_list = igraph_adjlist_get(&al, i);
@@ -337,16 +337,16 @@ int main(int argc, char * argv[]) {
     
   MPI_Allgather(&nVVBuf[my_rank], 1, MPI_UINT64_T, checkBuf, 1, MPI_UINT64_T, MPI_COMM_WORLD);
       printf("my_rank: %d checkBuf\n", my_rank);
-  output_vec(checkBuf, nprocs, my_rank);
-  while (checkNVV(checkBuf, nprocs) && iteration < 3) {
+      //output_vec(checkBuf, nprocs, my_rank);
+  while (checkNVV(checkBuf, nprocs)) {
     // reset flags
  
     nVVBuf[my_rank] = 0;
     nVV = 0;
 
-    printf("inside while, my_rank: %d\n", my_rank);
-    if (my_rank == 1)
-	output_graph(openList, grid_size, my_rank);
+    //printf("inside while, my_rank: %d\n", my_rank);
+    //    if (my_rank == 1)
+    //	output_graph(openList, grid_size, my_rank);
     
     astar(openList, closedList, src, dst, gList, hList, parent, nVVBuf,nVV,  my_rank, my_work);
     
@@ -364,7 +364,7 @@ int main(int argc, char * argv[]) {
     */
       MPI_Barrier(MPI_COMM_WORLD);
       //printf("my_rank: %d nVVBuf\n" , my_rank);
-    output_vec(nVVBuf, nprocs, my_rank);
+      //    output_vec(nVVBuf, nprocs, my_rank);
     MPI_Allgather(&nVVBuf[my_rank], 1, MPI_UINT64_T, checkBuf, 1, MPI_UINT64_T, MPI_COMM_WORLD);
     //printf("my_rank: %d checkBuf\n" , my_rank);
     
@@ -385,7 +385,7 @@ int main(int argc, char * argv[]) {
 
       //printf("my_rank: %d buffer_openList\n", my_rank);
       //output_graph(buffer_g_recv, grid_size, my_rank);
-          output_graph(buffer_open_recv, grid_size, my_rank);
+	  //  output_graph(buffer_open_recv, grid_size, my_rank);
       //printf("my_rank: %d buffer_closedList\n", my_rank);
       // output_graph(buffer_closed_recv, grid_size, my_rank);
       //printf("my_rank: %d buffer_gList\n", my_rank);
@@ -394,7 +394,7 @@ int main(int argc, char * argv[]) {
       aggregate(buffer_h_recv, hList, my_rank, my_work, nprocs);
       aggregate_open_or_closed(buffer_open_recv, openList, my_rank, my_work, nprocs);
       aggregate_open_or_closed(buffer_closed_recv, closedList, my_rank, my_work, nprocs);
-      aggregate_parent(buffer_parent_recv, parent, my_rank, my_work, nprocs);
+      aggregate_parent(buffer_parent_recv, parent, gList, my_rank, my_work, nprocs);
           MPI_Barrier(MPI_COMM_WORLD);
 	  //printf("my_rank: %d openList\n", my_rank);
 	  //if (my_rank == 1)
@@ -402,7 +402,7 @@ int main(int argc, char * argv[]) {
 	  //printf("my_rank: %d closedList\n", my_rank);
       //output_graph(closedList, grid_size, my_rank);
       //printf("my_rank: %d gList\n", my_rank);
-      //output_graph(gList, grid_size, my_rank);
+	  //	  output_graph(parent, grid_size, my_rank);
       //printf("my_rank: %d after mpi aggregate\n", my_rank);      
       // output_vec(levelBuf, no_of_nodes, my_rank);
       //printf("my_rank: %d nVV flag: %d\n", my_rank, checkNVV(nprocs));
@@ -415,12 +415,12 @@ int main(int argc, char * argv[]) {
 
    MPI_Allgather(&parent[my_rank*my_work], my_work, MPI_UINT64_T, buffer_parent_recv, my_work, MPI_UINT64_T, MPI_COMM_WORLD);
    MPI_Allgather(&gList[my_rank*my_work], my_work, MPI_UINT64_T, buffer_g_recv, my_work, MPI_UINT64_T, MPI_COMM_WORLD);
-   if (my_rank == 1)
-     output_graph(buffer_g_recv, grid_size, my_rank);
+   //   if (my_rank == 1)
+   //     output_graph(buffer_parent_recv, grid_size, my_rank);
   if (my_rank == nprocs -1) {
 
     if (gList[end] != numeric_limits<uint64_t>::max()) {
-       vector<uint64_t> path;
+      /* vector<uint64_t> path;
        uint64_t current = end;
        while (current != start) {
 	 path.push_back(current);
@@ -429,7 +429,7 @@ int main(int argc, char * argv[]) {
        }
        path.push_back(current);
        uint64_t * path_arr = &path[0];
-       output_vec(path_arr, path.size(), my_rank);
+       output_vec(path_arr, path.size(), my_rank);*/
        printf("astar_result: path exists with length: %*" PRIu64 "\n", 10, gList[end]);
     }
     else

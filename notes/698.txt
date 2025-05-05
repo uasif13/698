@@ -139,3 +139,34 @@ undirected graphs
 uint64_t
 reconstruct path
 add diagonals and 3d
+
+0 1 2
+3 4 5
+6 7 8
+
+.1 percent 1000 edges per vertex
+.01 percent density - 1m -> 100 neighbors
+
+    0     1     2     3     4     5     6     7     8     9 
+    1     2     3     4     5     6     7     8     9    10 
+    2     3     4     5     6     7     8     9    10    11 
+    3     4     5     6     7     8     9    10    11    12 
+    4     5     6     7     7     8     9    10     5     6 
+    5     6     7     8     6     7     8     9     4     5 
+    6     7     8     9     7     8     9    10     5     6 
+    7     8     9    10     8     9    10    11     6     7 
+    8     9    10    11     9    10    11    12     7     8 
+    9    10     4     5     6     7     8     9     8     9 
+    
+ 3x3 - can just use 1 num for state   
+153648720
+876543210
+// lets implement 4x4 then 5x5
+4x4 - can use 64 bit hexadecimal num
+1234567890abcde0
+5x5 - need to use 4 numbers 
+00,10,20,30,40,50,60,70,
+80,90,a0,b0,c0,d0,e0,f0,
+0f,1f,2f,3f,4f,5f,6f,7f,
+8f,9f,af,bf,cf,df,ef,ff
+

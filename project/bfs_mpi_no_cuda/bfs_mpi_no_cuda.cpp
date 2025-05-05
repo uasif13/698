@@ -3,7 +3,6 @@
   compile: mpicxx -o bfs bfs_mpi_no_cuda.cpp
   run: mpirun -n <nprocs> bfs <no_of_nodes> <start_node> <end_node> <percent>
  */
-
 #include <mpi.h>
 #include <cmath>
 #include <math.h>

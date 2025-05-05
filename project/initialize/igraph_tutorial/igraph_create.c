@@ -1,0 +1,50 @@
+#include <igraph.h>
+#include <stdio.h>
+
+int main(int argc, char* argv) {
+  igraph_t graph;
+  igraph_vector_int_t dimvector;
+  igraph_vector_int_t edges;
+  igraph_vector_int_t alledges;
+  igraph_vector_bool_t periodic;
+  igraph_real_t avg_path_len;
+  igraph_bool_t bycol;
+
+  FILE * output;
+
+  output = fopen("output.dot", "w");
+
+  igraph_vector_int_init(&dimvector, 2);
+  VECTOR(dimvector)[0] = 4;
+  VECTOR(dimvector)[1] = 4;
+
+  igraph_vector_bool_init(&periodic, 2);
+  igraph_vector_bool_fill(&periodic, false);
+  igraph_square_lattice(&graph, &dimvector, 0, IGRAPH_UNDIRECTED, /* mutual= */ false, &periodic);
+
+  //igraph_average_path_length(&graph, &avg_path_len, NULL, IGRAPH_UNDIRECTED, /* unconn= */ true);
+  printf("number of nodes: %d number of edges: %d\n", igraph_vcount(&graph), igraph_ecount(&graph));
+  printf("Average path length (lattice):        %g\n", (double) avg_path_len);
+
+  igraph_rng_seed(igraph_rng_default(), 42);
+  igraph_vector_int_init(&edges, 8);
+  for (igraph_integer_t i=0; i < igraph_vector_int_size(&edges); i++) {
+    VECTOR(edges)[i] = RNG_INTEGER(0, igraph_vcount(&graph) - 1);
+  }
+
+  //igraph_add_edges(&graph, &edges, NULL);
+  igraph_average_path_length(&graph, &avg_path_len, NULL, IGRAPH_UNDIRECTED, /* unconn= */ true);
+    printf("number of nodes: %d\n", igraph_vcount(&graph));
+     printf("Average path length (randomized lattice): %g\n", (double) avg_path_len);
+
+  if (output != NULL) {
+    igraph_write_graph_dot(&graph, output);
+   }
+  
+  igraph_vector_bool_destroy(&periodic);
+  igraph_vector_int_destroy(&dimvector);
+  //igraph_vector_int_destroy(&edges);
+  igraph_destroy(&graph);
+
+  return 0;
+}

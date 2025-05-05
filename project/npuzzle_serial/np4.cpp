@@ -1,0 +1,469 @@
+#include <cmath>
+#include <math.h>
+
+#include <iostream>
+#include <sys/time.h>
+#include <random>
+#include <climits>
+#include <map>
+#include <queue>
+
+#include <iterator>
+#include <algorithm>
+
+#include <set>
+
+using namespace std;
+using std::cout;
+using std::cerr;
+using std::endl;
+
+#define MAX_BUFFER_SIZE 1 << 25
+
+uint64_t open[MAX_BUFFER_SIZE], closed[MAX_BUFFER_SIZE], g[MAX_BUFFER_SIZE], h[MAX_BUFFER_SIZE], f[MAX_BUFFER_SIZE], nb[4];
+
+void output_vec(int * data, int data_size) {
+  for (int i = 0; i < data_size; i++) {
+    printf("%d ", data[i]);
+  }
+  printf("\n");
+}
+
+uint64_t random_start(uint64_t initial, int n) {
+  int total = n*n;
+  int * init_array = new int[total];
+  for (int i = 0; i < total; i ++) {
+    init_array[i] = i;
+  }
+  std::random_device rd;
+  std::mt19937 g(rd());
+  shuffle(init_array, init_array+total, default_random_engine(1));
+  for (int i = 0 ; i < total; i++) {
+    //printf("i: %d value: %lx\n",i, init_array[i]);
+    uint64_t value = init_array[i];
+    value = value << i*4;
+    initial += value;
+  }
+  initial = 0x123456089a7cdebf;
+  //initial = 0xd2a31c845096feb7;
+  printf("initial: %lx\n", initial);
+  
+  return initial;
+}
+// distance from proper location- manhattan
+//count of misplaced tiles
+int heuristic(uint64_t state, int n) {
+  uint64_t total = n*n;
+  int dist = 0;
+  for (uint64_t i = 0; i < total; i++) {
+    uint64_t value = (state >> 4*(total-1-i)) & 0xf;
+    //printf("value: %lx index: %d\n", value, i);
+    if (value != 0 && value != i+1) {
+      dist ++;
+     }
+    if (value  == 0 && i != total -1) {
+      dist ++;
+    }
+   
+  }
+  //  printf("dist: %d\n", dist);
+  return dist;
+}
+
+
+
+int copy_to_open(int * data, int n, int index) {
+  int total = n*n+2;
+  for (int i = index; i < total; i++) {
+    open[index+i] = data[i];
+  }
+  index += total;
+  return index;
+}
+int copy_to_closed(int * data, int n, int index) {
+  int total = n*n+2;
+  for (int i = index; i < total; i++) {
+    closed[index+i] = data[i];
+  }
+  index += total;
+  return index;
+}
+
+int find_zero(int * data, int n) {
+  int total = n*n+2;
+  for (int i = 2; i < total; i++) {
+    if (data[i] == 0)
+      return i;
+  }
+  return -1;
+}
+int add_neighbors(int * nb, int nb_size, int zero_index, int n) {
+  int zero_index_r = (zero_index-2)/n;
+  int zero_index_c = (zero_index-2)%n;
+    printf("zero_index_r: %d zero_index_c: %d\n", zero_index_r, zero_index_c);
+    // corners
+    if (zero_index == 0 || zero_index == n-1 || zero_index == n*n-1 || zero_index == n*(n-1)) {
+
+      nb_size = 2;
+      if (zero_index == 0) {
+	nb[0] = 1;
+	nb[1] = n;
+      }
+      else if (zero_index == n-1) {
+	nb[0] = -1;
+	nb[1] = n;
+      }
+      else if (zero_index == n*n-1) {
+	nb[0] = -n;
+	nb[1] = -1;
+      }
+      else if (zero_index_c == n*(n-1)) {
+	nb[0] = -n;
+	nb[1] = 1;
+      }
+    }
+    // edges
+    else if (zero_index_r == 0 || zero_index_r == n-1 || zero_index_c == 0 || zero_index_c == n-1) {
+
+      nb_size = 3;
+      if (zero_index_r == 0) {
+	nb[0] = -1;
+	nb[1] = 1;
+	nb[2] = n;
+      }
+      else if (zero_index_r == n-1) {
+	nb[0] = -1;
+	nb[1] = 1;
+	nb[2] = -n;
+      }
+      else if (zero_index_c == 0) {
+	nb[0] = -n;
+	nb[1] = n;
+	nb[2] = 1;
+      }
+      else if (zero_index_c == n-1) {
+	nb[0] = -n;
+	nb[1] = n;
+	nb[2] = -1;
+      }
+    }
+    // center
+    else {
+
+      nb_size = 4;
+      nb[0] = 1;
+      nb[1] = -1;
+      nb[2] = -n;
+      nb[3] = n;
+    }
+    return nb_size;
+}
+uint64_t check_zero(uint64_t state, int n) {
+  uint64_t total = n*n;
+  for (int i = 0; i < total; i++) {
+    uint64_t value = (state >> 4*i) & 0xf;
+    if (value == 0)
+      return total-i-1;
+  }
+  return n*n;
+}
+void output_vec(uint64_t * data, int data_size) {
+  for (int i = 0; i < data_size; i++) {
+    printf("%lx ", data[i]);
+  }
+  printf("\n");
+}
+uint64_t create_neighbor(uint64_t state, uint64_t zero_index, uint64_t swap_digit, int n) {
+  uint64_t total = 16;
+  uint64_t digit_place = zero_index+swap_digit;
+  //  printf("digit_place: %d\n", digit_place);
+  uint64_t digit = state >> (4*(total-digit_place-1)) & 0xf;
+  digit = digit << ((total-zero_index-1)*4);
+  //  printf("digit:        %*lx\n",16, digit);
+  uint64_t mask = 0xffffffffffffffff;
+  mask = mask & ~(0xf << ((total-digit_place-1)*4));
+  if (digit_place == 2)
+    mask = 0xff0fffffffffffff;
+  if (digit_place == 5)
+    mask = 0xfffff0ffffffffff;
+  if (digit_place == 6)
+    mask = 0xffffff0fffffffff;
+  if (digit_place == 7)
+    mask = 0xfffffff0ffffffff;  
+  if (digit_place == 8)
+    mask = 0xffffffff0fffffff;
+  
+  //  printf("mask:         %lx\n", mask);
+  uint64_t toggle_digit = state & mask;
+  //  printf("toggle_digit: %lx\n", toggle_digit);
+  //  printf("neighbor:     %lx\n", toggle_digit+digit);
+  //  printf("state:        %lx\n", state);
+  return toggle_digit+digit;
+}
+void add_neighbors(uint64_t * nb, uint64_t state, int n) {
+  uint64_t zero_index = check_zero(state,n);
+  uint64_t z_i_r = zero_index / n;
+  uint64_t z_i_c = zero_index % n;
+  //printf("zero_index: %d\n", zero_index);
+  if (zero_index == 0 || zero_index == n*n-1 || zero_index == n-1 || zero_index == n*(n-1)) {
+    // +1,+n
+    if (zero_index == 0) {
+      nb[0] = create_neighbor(state, zero_index, 1, n);
+      nb[1] = create_neighbor(state, zero_index, n, n);
+    } else if (zero_index == n*n-1) {
+      nb[0] = create_neighbor(state, zero_index, -1, n);
+      nb[1] = create_neighbor(state, zero_index, -n, n);      
+    } else if (zero_index == n-1) {
+      nb[0] = create_neighbor(state, zero_index, -1, n);
+      nb[1] = create_neighbor(state, zero_index, n, n);            
+    } else {
+      nb[0] = create_neighbor(state, zero_index, 1, n);
+      nb[1] = create_neighbor(state, zero_index, -n, n);                  
+    }
+    nb[2] = 0;
+    nb[3] = 0;
+  } else if(z_i_r == 0 || z_i_r == n-1 || z_i_c == 0 || z_i_c == n-1) {
+    if (z_i_r == 0) {
+      nb[0] = create_neighbor(state, zero_index, -1, n);
+      nb[1] = create_neighbor(state, zero_index, 1, n);
+      nb[2] = create_neighbor(state, zero_index, n, n);            
+    } else if (z_i_r == n-1) {
+      nb[0] = create_neighbor(state, zero_index, -1, n);
+      nb[1] = create_neighbor(state, zero_index, 1, n);
+      nb[2] = create_neighbor(state, zero_index, -n, n);            
+    } else if (z_i_c == 0) {
+      nb[0] = create_neighbor(state, zero_index, 1, n);
+      nb[1] = create_neighbor(state, zero_index, -n, n);
+      nb[2] = create_neighbor(state, zero_index, n, n);                  
+    } else {
+      nb[0] = create_neighbor(state, zero_index, -1, n);
+      nb[1] = create_neighbor(state, zero_index, -n, n);
+      nb[2] = create_neighbor(state, zero_index, n, n);                  
+    }
+    nb[3] = 0;
+  } else {
+    nb[0] = create_neighbor(state, zero_index, -1, n);
+    nb[1] = create_neighbor(state, zero_index, 1, n);
+    nb[2] = create_neighbor(state, zero_index, -n, n);
+    nb[3] = create_neighbor(state, zero_index, n, n);            
+  }
+  //output_vec(nb, 4);
+}
+
+class Node {
+public:
+  uint64_t state;
+  uint64_t f;
+  uint64_t g;
+  uint64_t h;
+  uint64_t n = 4;
+
+  Node(uint64_t p_state, uint64_t p_g) {
+    state = p_state;
+    g = p_g;
+    h = heuristic(state, n);
+    f = g+h;
+  }
+};
+class Compare {
+public:
+  bool operator()(Node * a, Node * b) {
+    if (a -> f > b -> f)
+      return true;
+    else
+      return false;
+  }
+};
+int npuzzle(int n) {
+  uint64_t initial=0, current=0, neighbor;
+  
+  initial = random_start(initial,n);
+  Node * start = new Node(initial, 0);
+  priority_queue<Node*, vector<Node*>, Compare> pq;
+  pq.push(start);
+  //  g[0] = 0;
+  //  h[0] = heuristic(initial, n);
+  //  f[0] = g[0] + h[0];
+  //  multimap<uint64_t,uint64_t>pq;
+  //  pq.insert(heuristic(initial,n), initial);
+  
+  printf("priority_queue_top: %lx\n", pq.top() -> state);
+  uint64_t open_size = 1;
+  uint64_t closed_size = 0;
+  uint64_t open_index = 1;
+  uint64_t closed_index = 0;
+  uint64_t g_size = 1;
+  uint64_t h_size = 1;
+  uint64_t f_size = 1;
+  //  uint64_t * nb = new uint64_t[4];
+  uint64_t zero_index;
+  bool inside_closed;
+  bool inside_open;
+  uint64_t n_open_i = 0;
+  uint64_t t_g;
+  int iteration = 0;
+  while (open_size > 0) {
+    uint64_t lowest_f = 0xFFFFFFFFFFFFFFFF;
+    uint64_t lowest_f_index;
+    for (int i = 0; i < f_size; i++) {
+      if (open[i] != 0 && f[i] < lowest_f) {
+	lowest_f_index= i;
+	lowest_f = f[i];
+      }
+    }
+    // end reached
+    if (h[lowest_f_index] == 0)
+      return 1;
+    current = open[lowest_f_index];
+    
+    open[lowest_f_index] = 0;
+    open_size  --;
+    closed[closed_index] = current;
+    closed_index ++;
+    closed_size ++;
+    add_neighbors(nb, current, n);
+    //printf("added neighbors\n");
+    //printf("nb: %lx\n",nb[0]);
+    //output_vec(nb, 4);
+    for (int n_i = 0; n_i < 4; n_i ++) {
+      inside_closed = false;
+      inside_open = false;
+      //printf("n_i: %d\n", n_i);
+      //printf("neighbor: %lx\n", nb[n_i]);
+      if (nb[n_i] == 0)
+	continue;
+      //printf("neighbor not zero\n");
+      neighbor = nb[n_i];
+      
+      for (int c_i = 0; c_i < closed_size; c_i++) {
+	if (neighbor == closed[c_i]) {
+	  inside_closed = true;
+	  continue;
+	}
+      }
+
+      if (inside_closed)
+	continue;
+      //printf("neighbor not in closed\n");
+      t_g = g[lowest_f_index] + 1;
+      
+      //printf("check_open\n");
+      for (int o_i = 0; o_i <= open_index; o_i++) {
+	if (neighbor == open[o_i]) {
+	  inside_open = true;
+	  n_open_i = o_i;
+	}
+      }
+      //printf("neighbor in open: %d\n", inside_open);
+      if (!inside_open) {
+	open[open_index] = neighbor;
+	open_size++;
+	n_open_i = open_index;
+	open_index++;
+      } else if (g[n_open_i] != 0 && t_g >= g[n_open_i]) {
+	continue;
+      }
+      ///printf("open_size: %d open_index: %d\n", open_size, open_index);
+      //output_vec(open, open_index);
+      g[n_open_i] = t_g;
+      g_size ++;
+      h[n_open_i] = heuristic(neighbor, n);
+      h_size ++;
+      f[n_open_i] = g[n_open_i] + h[n_open_i];
+      f_size ++;
+      //output_vec(g, g_size);
+      //output_vec(h, h_size);
+      //output_vec(f, f_size);
+    }
+    iteration++;
+    if (iteration%50000 == 0)
+      printf("iteration_count: %d open_index: %d lowest_f : %d\n", iteration, open_index, lowest_f);
+  }
+  /* output_vec(initial, total);
+  open_index = copy_to_open(initial, n, open_index);
+  int iteration = 0;
+  while (open_size > 0 && iteration < 3) {
+    // get lowest f array
+    int lowest_f_score = INT_MAX;
+    int lowest_f_index;
+    for (int i = 0; i < open_size*total; i += total) {
+      if (open[i] + open[i+1] < lowest_f_score) {
+	lowest_f_score = open[i]+open[i+1];
+	lowest_f_index = i;
+      }
+    }
+    printf("lowest_f_score: %d lowest_f_index: %d\n", lowest_f_score, lowest_f_index);
+    for (int i = 0; i < total; i ++) {
+      current[i] = open[lowest_f_index+i];
+    }
+   
+    // all tiles in correct place
+    if (current[1] == 0) {
+      return 1;
+    }
+    closed_index = copy_to_closed(current, n, closed_index);
+    output_vec(current,total);
+    zero_index = find_zero(current, n);
+    printf("zero_index: %d\n", zero_index);
+    nb_size = add_neighbors(nb, nb_size, zero_index, n);
+    printf("nb_size: %d\n",nb_size);
+    output_vec(nb,4);
+    for (int nb_index = 0; nb_index < nb_size; nb_index++) {
+      int nb_val = nb[nb_index];
+      int swap_elem = nb_val+zero_index;
+      printf("nb_val: %d swap_index: %d\n",nb_val, swap_elem);
+      // create neighbor
+      for (int i = 0; i < total; i++) {
+	if (i == swap_elem) {
+	  neighbor[i] = 0;
+	}else if (i == zero_index) {
+	  neighbor[i] = current[swap_elem];
+	} else {
+	  neighbor[i] = current[i];
+	}
+      }
+      // check closed list
+      for (int i = 0; i < total*closed_size; i+=total) {
+	inside_closed = true;
+	for (int j = 2; j < total ; j++) {
+	  if (neighbor[i] != closed[i+j])
+	    inside_closed =false;
+	}
+	if (inside_closed)
+	  continue;
+      }
+      if (inside_closed)
+	continue;
+      int g_score = current[0] + 1;
+      // check open list
+      for (int i = 0; i < total*open_size; i+= total) {
+	inside_open = true;
+	for (int j = 2; j < total; j++) {
+	  if (neighbor[i] != open[i+j])
+	    insid
+	}
+
+      }
+      
+
+
+
+    }
+    iteration ++;
+    }*/
+  return -1;
+}
+
+int main(int argc, char* argv[]) {
+  int n = 4;
+  if (argc == 2)
+    n = atoi(argv[1]);
+  if (n < 4 || n > 4)
+    printf("Error: n must be 4");
+  int result = npuzzle(n);
+    if (result == 1)
+      printf("path exists\n");
+    else
+      printf("path dne\n");
+  return 1;
+}

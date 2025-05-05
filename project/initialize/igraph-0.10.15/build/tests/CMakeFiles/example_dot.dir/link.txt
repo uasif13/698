@@ -1,0 +1,1 @@
+/usr/bin/c++ -O3 -DNDEBUG CMakeFiles/example_dot.dir/__/examples/simple/dot.c.o -o example_dot  ../src/libigraph.a -lm /usr/lib/gcc/x86_64-redhat-linux/12/libgomp.so /usr/lib64/libpthread.a 

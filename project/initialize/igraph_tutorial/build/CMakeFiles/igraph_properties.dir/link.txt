@@ -1,0 +1,1 @@
+/usr/bin/c++ CMakeFiles/igraph_properties.dir/igraph_properties.c.o -o igraph_properties  /usr/local/lib64/libigraph.a -lm /usr/lib/gcc/x86_64-redhat-linux/12/libgomp.so /usr/lib64/libpthread.a 

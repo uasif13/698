@@ -1,0 +1,1 @@
+/usr/bin/c++ CMakeFiles/igraph_test.dir/igraph_test.c.o -o igraph_test  /usr/local/lib64/libigraph.a -lm /usr/lib/gcc/x86_64-redhat-linux/12/libgomp.so /usr/lib64/libpthread.a 
