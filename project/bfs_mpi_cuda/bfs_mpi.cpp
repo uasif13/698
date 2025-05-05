@@ -312,9 +312,8 @@ int main(int argc, char * argv[]) {
       }
   }
 
-  
-
-  if (my_rank == end_node/nprocs) {
+  //output_vec(level, no_of_nodes, my_rank);
+  if (my_rank == end_node/my_work) {
     if (level[end_node] != INT_MAX)
       printf("bfs_result: path exists\n");
     else
